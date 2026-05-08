@@ -1,0 +1,59 @@
+{
+  "version": 1,
+  "skills": {
+    "cavecrew": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/cavecrew/SKILL.md",
+      "computedHash": "4d3ebff08ec3ac0e1f63b3b4844fefd86d4c522d631c8df4b0b6c77fb52ff2bf"
+    },
+    "caveman": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/caveman/SKILL.md",
+      "computedHash": "63da1917ea15c9d8886eb2e62e0e441ba339021ecbd7b4f8c11da30b431a7e95"
+    },
+    "caveman-commit": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/caveman-commit/SKILL.md",
+      "computedHash": "106c36d1c4d16e7ccde1a57f32a462e6a82e4c384e85f553e8bdc9bbf7254b11"
+    },
+    "caveman-compress": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/caveman-compress/SKILL.md",
+      "computedHash": "4fc07350ee82a58deaccdfc3bc4cb81e647057642e7441238298481a1d4ed77f"
+    },
+    "caveman-help": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/caveman-help/SKILL.md",
+      "computedHash": "82ecc7cd0c5b0f30d82751bb52be30555ed2fefdca1c76a2cec8bb04a94f0df7"
+    },
+    "caveman-review": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/caveman-review/SKILL.md",
+      "computedHash": "0301948bfc4f0e344bddabfc2d6afebc0d382eb2342174550d4d6bf3df3a1330"
+    },
+    "caveman-stats": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/caveman-stats/SKILL.md",
+      "computedHash": "0d67a1f6aacf1d61537362120f06f2ec2bd7a68ba002b2b6f66bc8f5f0643c00"
+    },
+    "compress": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/compress/SKILL.md",
+      "computedHash": "5db6a015c8f9cc752978559069032f4fcf1ba00d210c8de30f88ef2aa810e54e"
+    },
+    "find-skills": {
+      "source": "davidbasilefilho/skills",
+      "sourceType": "github",
+      "skillPath": "skills/find-skills/SKILL.md",
+      "computedHash": "d21c9552c58370305764d726e9b973c5cb75fe9cb93a92f010bbf0535340be02"
+    }
+  }
+}
