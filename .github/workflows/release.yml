@@ -1,0 +1,40 @@
+name: release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - target: i686-pc-windows-msvc
+            artifact_name: admin-toolkit-windows-x86
+          - target: x86_64-pc-windows-msvc
+            artifact_name: admin-toolkit-windows-x64
+          - target: aarch64-pc-windows-msvc
+            artifact_name: admin-toolkit-windows-arm64
+
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.target }}
+
+      - name: Build release binary
+        run: cargo build --release --target ${{ matrix.target }}
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.artifact_name }}
+          path: target/${{ matrix.target }}/release/admin-toolkit.exe
+          if-no-files-found: error
