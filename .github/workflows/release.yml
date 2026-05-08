@@ -15,11 +15,11 @@ jobs:
       matrix:
         include:
           - target: i686-pc-windows-msvc
-            artifact_name: admin-toolkit-windows-x86
+            artifact_name: windows-x86
           - target: x86_64-pc-windows-msvc
-            artifact_name: admin-toolkit-windows-x64
+            artifact_name: windows-x64
           - target: aarch64-pc-windows-msvc
-            artifact_name: admin-toolkit-windows-arm64
+            artifact_name: windows-arm64
 
     runs-on: windows-latest
 
