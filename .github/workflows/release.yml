@@ -35,7 +35,14 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
+      - name: Prepare versioned release asset
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}"
+          $asset = "admin-toolkit-$version-${{ matrix.artifact_name }}.exe"
+          Copy-Item "target/${{ matrix.target }}/release/admin-toolkit.exe" $asset
+
       - name: Publish release asset
         uses: softprops/action-gh-release@v3
         with:
-          files: target/${{ matrix.target }}/release/admin-toolkit.exe
+          files: admin-toolkit-${{ github.ref_name }}-${{ matrix.artifact_name }}.exe
