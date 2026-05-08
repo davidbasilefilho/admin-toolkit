@@ -6,6 +6,9 @@ on:
       - "v*"
   workflow_dispatch:
 
+permissions:
+  contents: write
+
 jobs:
   build:
     strategy:
@@ -32,9 +35,7 @@ jobs:
       - name: Build release binary
         run: cargo build --release --target ${{ matrix.target }}
 
-      - name: Upload artifact
-        uses: actions/upload-artifact@v4
+      - name: Publish release asset
+        uses: softprops/action-gh-release@v3
         with:
-          name: ${{ matrix.artifact_name }}
-          path: target/${{ matrix.target }}/release/admin-toolkit.exe
-          if-no-files-found: error
+          files: target/${{ matrix.target }}/release/admin-toolkit.exe
