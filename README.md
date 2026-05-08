@@ -41,9 +41,36 @@ There were personal reasons too: I wanted to learn Rust properly, and building s
 
 ## Build and test
 
+<details>
+<summary>Development build</summary>
+
+```bash
+cargo build
+```
+
+Produces a debug binary at `target/debug/admin-toolkit.exe`.
+
+</details>
+
+<details>
+<summary>Release build</summary>
+
+```bash
+cargo build --release
+```
+
+Produces an optimized binary at `target/release/admin-toolkit.exe`.
+
+</details>
+
+<details>
+<summary>Run tests</summary>
+
 ```bash
 cargo test
 ```
+
+</details>
 
 ## Release
 
