@@ -5,6 +5,15 @@ use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
 
+const BLUE: Color = Color::Rgb(96, 165, 250);
+const CYAN: Color = Color::Rgb(34, 211, 238);
+const GREEN: Color = Color::Rgb(74, 222, 128);
+const YELLOW: Color = Color::Rgb(250, 204, 21);
+const RED: Color = Color::Rgb(248, 113, 113);
+const MAGENTA: Color = Color::Rgb(232, 121, 249);
+const TEXT: Color = Color::Rgb(226, 232, 240);
+const MUTED: Color = Color::Rgb(148, 163, 184);
+
 pub fn render(frame: &mut Frame<'_>, state: &AppState) {
     match state.screen {
         Screen::Edit => render_edit(frame, state),
@@ -32,14 +41,15 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     render_footer(
         frame,
         chunks[3],
-        "↑↓ move  space toggle  e edit target  enter confirm  q quit",
+        "↑↓ mover  espaço alternar  e editar  enter confirmar  q sair",
     );
 }
 
 fn render_input(frame: &mut Frame<'_>, state: &AppState, kind: InputKind) {
     let title = match kind {
-        InputKind::Hostname => String::from("Hostname target"),
-        InputKind::Password => format!("Password target for {}", PREFEITURA_USER),
+        InputKind::Hostname => String::from("Destino do nome do computador"),
+        InputKind::Password => format!("Destino da senha da {}", PREFEITURA_USER),
+        InputKind::Domain => String::from("Destino do domínio"),
     };
 
     let chunks = Layout::default()
@@ -56,16 +66,32 @@ fn render_input(frame: &mut Frame<'_>, state: &AppState, kind: InputKind) {
     let content = match kind {
         InputKind::Hostname => state.input_buffer.clone(),
         InputKind::Password => mask_text(&state.input_buffer),
+        InputKind::Domain => state.input_buffer.clone(),
     };
 
     let input = Paragraph::new(vec![
         Line::from(title),
-        Line::from(Span::styled(content, Style::default().fg(Color::Yellow))),
+        Line::from(Span::styled(
+            content,
+            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+        )),
     ])
-    .block(Block::default().borders(Borders::ALL).title("Input"));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(BLUE))
+            .title(Span::styled(
+                "Entrada",
+                Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
+            )),
+    );
     frame.render_widget(input, chunks[1]);
 
-    render_status(frame, chunks[2], "Enter save  esc cancel  backspace delete");
+    render_status(
+        frame,
+        chunks[2],
+        "enter salvar  esc cancelar  backspace apagar",
+    );
 }
 
 fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
@@ -88,30 +114,41 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
         .collect::<Vec<_>>();
 
     let confirm =
-        Paragraph::new(summary).block(Block::default().borders(Borders::ALL).title("Confirm"));
+        Paragraph::new(summary).block(Block::default().borders(Borders::ALL).title("Confirmar"));
     frame.render_widget(confirm, chunks[1]);
 
     let warnings = if state.warnings().is_empty() {
-        String::from("No reboot warning.")
+        String::from("Sem aviso de reinicialização.")
     } else {
-        state.warnings().join(" ")
+        state.warnings().join(" • ")
     };
 
     render_status(frame, chunks[2], &warnings);
-    render_footer(frame, chunks[3], "enter apply  esc back");
+    render_footer(frame, chunks[3], "enter aplicar  esc voltar");
 }
 
 fn render_blocked(frame: &mut Frame<'_>, state: &AppState) {
     let area = centered_rect(72, 36, frame.area());
     let block = Paragraph::new(vec![
-        Line::from("Elevation required"),
+        Line::from(Span::styled(
+            "Privilégios de administrador necessários",
+            Style::default().fg(RED).add_modifier(Modifier::BOLD),
+        )),
         Line::from(Span::styled(
             state.blocked_reason.as_str(),
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            Style::default().fg(TEXT),
         )),
     ])
     .alignment(Alignment::Center)
-    .block(Block::default().borders(Borders::ALL).title("Blocked"));
+    .block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(RED))
+            .title(Span::styled(
+                "Bloqueado",
+                Style::default().fg(RED).add_modifier(Modifier::BOLD),
+            )),
+    );
     frame.render_widget(block, area);
 }
 
@@ -130,41 +167,59 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState) {
     let mut lines = vec![Line::from(state.result_message.as_str())];
     if state.reboot_required {
         lines.push(Line::from(Span::styled(
-            "Reboot required.",
-            Style::default()
-                .fg(Color::Yellow)
-                .add_modifier(Modifier::BOLD),
+            "Reinicialização necessária.",
+            Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
         )));
     }
 
-    let result =
-        Paragraph::new(lines).block(Block::default().borders(Borders::ALL).title("Result"));
+    let result = Paragraph::new(lines).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(GREEN))
+            .title(Span::styled(
+                "Resultado",
+                Style::default().fg(GREEN).add_modifier(Modifier::BOLD),
+            )),
+    );
     frame.render_widget(result, chunks[1]);
-    render_footer(frame, chunks[2], "enter return to edit  q quit");
+    render_footer(frame, chunks[2], "enter voltar à edição  q sair");
 }
 
 fn render_snapshot(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     let snapshot = Paragraph::new(vec![
         Line::from(vec![
-            Span::styled("Hostname: ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(state.snapshot.hostname.as_str()),
-        ]),
-        Line::from(vec![
-            Span::styled("Domain: ", Style::default().add_modifier(Modifier::BOLD)),
-            Span::raw(state.snapshot.domain.as_str()),
+            Span::styled(
+                "Nome do computador: ",
+                Style::default().fg(BLUE).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(state.snapshot.hostname.as_str(), Style::default().fg(TEXT)),
         ]),
         Line::from(vec![
             Span::styled(
-                "Domain target: ",
-                Style::default().add_modifier(Modifier::BOLD),
+                "Domínio atual: ",
+                Style::default().fg(MAGENTA).add_modifier(Modifier::BOLD),
             ),
-            Span::raw(DOMAIN_TARGET),
+            Span::styled(state.snapshot.domain.as_str(), Style::default().fg(TEXT)),
+        ]),
+        Line::from(vec![
+            Span::styled(
+                "Domínio de destino: ",
+                Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+            ),
+            Span::styled(
+                DOMAIN_TARGET,
+                Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+            ),
         ]),
     ])
     .block(
         Block::default()
             .borders(Borders::ALL)
-            .title("Current state"),
+            .border_style(Style::default().fg(BLUE))
+            .title(Span::styled(
+                "Estado atual",
+                Style::default().fg(BLUE).add_modifier(Modifier::BOLD),
+            )),
     );
     frame.render_widget(snapshot, area);
 }
@@ -172,34 +227,46 @@ fn render_snapshot(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
 fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     let items = vec![
         action_item(
-            "Change hostname",
+            "Alterar nome do computador",
             state.hostname_enabled,
             matches!(state.focus, Focus::Hostname),
             if state.hostname_target.is_empty() {
-                Some("needs target")
+                Some("precisa de destino")
             } else {
                 Some(state.hostname_target.as_str())
             },
         ),
         action_item(
-            "Change password for Prefeitura",
+            "Alterar senha da Prefeitura",
             state.password_enabled,
             matches!(state.focus, Focus::Password),
             if state.password_value.is_empty() {
-                Some("needs password")
+                Some("precisa de senha")
             } else {
-                Some("password set")
+                Some("senha definida")
             },
         ),
         action_item(
-            "Change domain to itu.local",
+            "Alterar domínio para itu.local",
             state.domain_enabled,
             matches!(state.focus, Focus::Domain),
-            Some("fixed target"),
+            if state.domain_target.is_empty() {
+                Some("precisa de destino")
+            } else {
+                Some(state.domain_target.as_str())
+            },
         ),
     ];
 
-    let list = List::new(items).block(Block::default().borders(Borders::ALL).title("Actions"));
+    let list = List::new(items).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(BLUE))
+            .title(Span::styled(
+                "Ações",
+                Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
+            )),
+    );
     frame.render_widget(list, area);
 }
 
@@ -213,32 +280,37 @@ fn action_item(label: &str, enabled: bool, focused: bool, note: Option<&str>) ->
 
     if let Some(note) = note {
         spans.push(Span::raw(" - "));
-        spans.push(Span::styled(
-            note.to_string(),
-            Style::default().fg(Color::DarkGray),
-        ));
+        spans.push(Span::styled(note.to_string(), Style::default().fg(MUTED)));
     }
 
     let mut item = ListItem::new(Line::from(spans));
     if focused {
-        item = item.style(
-            Style::default()
-                .fg(Color::Cyan)
-                .add_modifier(Modifier::BOLD),
-        );
+        item = item.style(Style::default().fg(TEXT).add_modifier(Modifier::BOLD));
+    } else if enabled {
+        item = item.style(Style::default().fg(GREEN));
     }
     item
 }
 
 fn render_status(frame: &mut Frame<'_>, area: Rect, text: &str) {
-    let status = Paragraph::new(text).block(Block::default().borders(Borders::ALL).title("Status"));
+    let status = Paragraph::new(text).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(YELLOW))
+            .title(Span::styled(
+                "Status",
+                Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
+            )),
+    );
     frame.render_widget(status, area);
 }
 
 fn render_footer(frame: &mut Frame<'_>, area: Rect, text: &str) {
-    let footer = Paragraph::new(text)
-        .alignment(Alignment::Center)
-        .block(Block::default().borders(Borders::ALL));
+    let footer = Paragraph::new(text).alignment(Alignment::Center).block(
+        Block::default()
+            .borders(Borders::ALL)
+            .border_style(Style::default().fg(BLUE)),
+    );
     frame.render_widget(footer, area);
 }
 

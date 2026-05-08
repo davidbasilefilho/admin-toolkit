@@ -98,6 +98,14 @@ impl<Ops: WindowsOps> App<Ops> {
                 self.state.move_focus_next();
                 Ok(false)
             }
+            KeyCode::Tab => {
+                self.state.move_focus_next();
+                Ok(false)
+            }
+            KeyCode::BackTab => {
+                self.state.move_focus_previous();
+                Ok(false)
+            }
             KeyCode::Char(' ') => {
                 self.state.toggle_focused();
                 Ok(false)
@@ -106,19 +114,27 @@ impl<Ops: WindowsOps> App<Ops> {
                 self.maybe_begin_input();
                 Ok(false)
             }
+            KeyCode::Char('d') => {
+                if matches!(self.state.focus, Focus::Domain) && self.state.domain_enabled {
+                    self.state.begin_input(InputKind::Domain);
+                }
+                Ok(false)
+            }
             KeyCode::Enter => {
                 if self.state.can_confirm() {
                     self.state.screen = Screen::Confirm;
-                    self.state.status = String::from("Review staged changes.");
+                    self.state.status = String::from("Revise as alterações em estágio.");
                 } else if matches!(self.state.focus, Focus::Hostname) && self.state.hostname_enabled
                 {
                     self.state.begin_input(InputKind::Hostname);
                 } else if matches!(self.state.focus, Focus::Password) && self.state.password_enabled
                 {
                     self.state.begin_input(InputKind::Password);
+                } else if matches!(self.state.focus, Focus::Domain) && self.state.domain_enabled {
+                    self.state.begin_input(InputKind::Domain);
                 } else {
                     self.state.status =
-                        String::from("Enable actions and fill required values first.");
+                        String::from("Ative as ações e preencha os campos obrigatórios primeiro.");
                 }
                 Ok(false)
             }
@@ -153,7 +169,7 @@ impl<Ops: WindowsOps> App<Ops> {
             KeyCode::Char('q') => Ok(true),
             KeyCode::Esc => {
                 self.state.screen = Screen::Edit;
-                self.state.status = String::from("Edit mode.");
+                self.state.status = String::from("Modo de edição.");
                 Ok(false)
             }
             KeyCode::Enter => {
@@ -169,7 +185,7 @@ impl<Ops: WindowsOps> App<Ops> {
             KeyCode::Char('q') | KeyCode::Esc => Ok(true),
             KeyCode::Enter => {
                 self.state.screen = Screen::Edit;
-                self.state.status = String::from("Edit mode.");
+                self.state.status = String::from("Modo de edição.");
                 Ok(false)
             }
             _ => Ok(false),
@@ -184,13 +200,14 @@ impl<Ops: WindowsOps> App<Ops> {
             Focus::Password if self.state.password_enabled => {
                 self.state.begin_input(InputKind::Password)
             }
+            Focus::Domain if self.state.domain_enabled => self.state.begin_input(InputKind::Domain),
             _ => {}
         }
     }
 
     fn apply_staged_changes(&mut self) -> io::Result<()> {
         let Some(plan) = self.state.selected_plan() else {
-            self.state.status = String::from("No actions selected.");
+            self.state.status = String::from("Nenhuma ação selecionada.");
             return Ok(());
         };
 
@@ -202,7 +219,105 @@ impl<Ops: WindowsOps> App<Ops> {
         self.state.reboot_required = reboot_required;
         self.state.result_message = message;
         self.state.screen = Screen::Result;
-        self.state.status = String::from("Apply complete.");
+        self.state.status = String::from("Aplicação concluída.");
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::cell::Cell;
+
+    #[derive(Default)]
+    struct FakeWindowsOps {
+        applied: Cell<usize>,
+    }
+
+    impl WindowsOps for FakeWindowsOps {
+        fn snapshot(&self) -> io::Result<crate::state::SystemSnapshot> {
+            Ok(crate::state::SystemSnapshot {
+                hostname: String::from("PC-01"),
+                domain: String::from("WORKGROUP"),
+                elevated: true,
+            })
+        }
+
+        fn apply(&self, plan: &crate::state::ApplyPlan) -> io::Result<ApplyOutcome> {
+            self.applied.set(self.applied.get() + 1);
+            Ok(ApplyOutcome {
+                reboot_required: plan.hostname.is_some() || plan.domain.is_some(),
+                message: String::from("Aplicado com sucesso."),
+            })
+        }
+    }
+
+    fn app() -> App<FakeWindowsOps> {
+        App::new(
+            crate::state::SystemSnapshot {
+                hostname: String::from("PC-01"),
+                domain: String::from("WORKGROUP"),
+                elevated: true,
+            },
+            FakeWindowsOps::default(),
+        )
+    }
+
+    #[test]
+    fn tab_and_backtab_cycle_focus() {
+        let mut app = app();
+
+        app.handle_key(KeyCode::Tab).unwrap();
+        assert!(matches!(app.state.focus, Focus::Password));
+
+        app.handle_key(KeyCode::BackTab).unwrap();
+        assert!(matches!(app.state.focus, Focus::Hostname));
+    }
+
+    #[test]
+    fn enter_flow_opens_input_applies_and_returns_to_edit() {
+        let mut app = app();
+
+        app.state.hostname_enabled = true;
+        app.handle_key(KeyCode::Enter).unwrap();
+        assert!(matches!(
+            app.state.screen,
+            Screen::Input(InputKind::Hostname)
+        ));
+
+        for ch in ['P', 'C', '-', '0', '2'] {
+            app.handle_key(KeyCode::Char(ch)).unwrap();
+        }
+        app.handle_key(KeyCode::Enter).unwrap();
+        assert!(matches!(app.state.screen, Screen::Edit));
+
+        app.handle_key(KeyCode::Enter).unwrap();
+        assert!(matches!(app.state.screen, Screen::Confirm));
+
+        app.handle_key(KeyCode::Enter).unwrap();
+        assert!(matches!(app.state.screen, Screen::Result));
+        assert_eq!(app.ops.applied.get(), 1);
+
+        app.handle_key(KeyCode::Enter).unwrap();
+        assert!(matches!(app.state.screen, Screen::Edit));
+    }
+
+    #[test]
+    fn domain_can_be_edited_from_focus() {
+        let mut app = app();
+
+        app.state.domain_enabled = true;
+        app.state.focus = Focus::Domain;
+        app.state.domain_target = String::new();
+        app.handle_key(KeyCode::Char('d')).unwrap();
+        assert!(matches!(app.state.screen, Screen::Input(InputKind::Domain)));
+
+        for ch in ['i', 't', 'u', '.', 'l', 'o', 'c', 'a', 'l'] {
+            app.handle_key(KeyCode::Char(ch)).unwrap();
+        }
+        app.handle_key(KeyCode::Enter).unwrap();
+
+        assert_eq!(app.state.domain_target, "itu.local");
+        assert!(matches!(app.state.screen, Screen::Edit));
     }
 }

@@ -37,6 +37,7 @@ impl Focus {
 pub enum InputKind {
     Hostname,
     Password,
+    Domain,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -65,6 +66,7 @@ pub struct AppState {
     pub domain_enabled: bool,
     pub hostname_target: String,
     pub password_value: String,
+    pub domain_target: String,
     pub input_buffer: String,
     pub status: String,
     pub blocked_reason: String,
@@ -77,7 +79,7 @@ impl AppState {
         let blocked_reason = if snapshot.elevated {
             String::new()
         } else {
-            String::from("Administrator privileges are required.")
+            String::from("Privilégios de administrador são necessários.")
         };
 
         Self {
@@ -92,8 +94,9 @@ impl AppState {
             domain_enabled: false,
             hostname_target: String::new(),
             password_value: String::new(),
+            domain_target: String::from(DOMAIN_TARGET),
             input_buffer: String::new(),
-            status: String::from("Ready."),
+            status: String::from("Pronto."),
             blocked_reason,
             result_message: String::new(),
             reboot_required: false,
@@ -115,18 +118,20 @@ impl AppState {
         self.input_buffer = match kind {
             InputKind::Hostname => self.hostname_target.clone(),
             InputKind::Password => self.password_value.clone(),
+            InputKind::Domain => self.domain_target.clone(),
         };
         self.screen = Screen::Input(kind);
         self.status = match kind {
-            InputKind::Hostname => String::from("Enter new hostname."),
-            InputKind::Password => String::from("Enter new password for Prefeitura."),
+            InputKind::Hostname => String::from("Informe o novo nome do computador."),
+            InputKind::Password => String::from("Informe a nova senha da Prefeitura."),
+            InputKind::Domain => String::from("Informe o novo domínio."),
         };
     }
 
     pub fn cancel_input(&mut self) {
         self.input_buffer.clear();
         self.screen = Screen::Edit;
-        self.status = String::from("Edit mode.");
+        self.status = String::from("Modo de edição.");
     }
 
     pub fn commit_input(&mut self, kind: InputKind) {
@@ -134,20 +139,21 @@ impl AppState {
         match kind {
             InputKind::Hostname => self.hostname_target = value,
             InputKind::Password => self.password_value = value,
+            InputKind::Domain => self.domain_target = value,
         }
         self.input_buffer.clear();
         self.screen = Screen::Edit;
-        self.status = String::from("Target updated.");
+        self.status = String::from("Destino atualizado.");
     }
 
     pub fn move_focus_next(&mut self) {
         self.focus = self.focus.next();
-        self.status = String::from("Edit mode.");
+        self.status = String::from("Modo de edição.");
     }
 
     pub fn move_focus_previous(&mut self) {
         self.focus = self.focus.previous();
-        self.status = String::from("Edit mode.");
+        self.status = String::from("Modo de edição.");
     }
 
     pub fn toggle_focused(&mut self) {
@@ -156,7 +162,7 @@ impl AppState {
             Focus::Password => self.password_enabled = !self.password_enabled,
             Focus::Domain => self.domain_enabled = !self.domain_enabled,
         }
-        self.status = String::from("Selection updated.");
+        self.status = String::from("Seleção atualizada.");
     }
 
     pub fn selected_plan(&self) -> Option<ApplyPlan> {
@@ -167,30 +173,29 @@ impl AppState {
         Some(ApplyPlan {
             hostname: self.hostname_enabled.then(|| self.hostname_target.clone()),
             password: self.password_enabled.then(|| self.password_value.clone()),
-            domain: self.domain_enabled.then(|| String::from(DOMAIN_TARGET)),
+            domain: self.domain_enabled.then(|| self.domain_target.clone()),
         })
     }
 
     pub fn summary_lines(&self) -> Vec<String> {
         let mut lines = vec![
-            format!("Hostname: {}", self.snapshot.hostname),
-            format!("Domain: {}", self.snapshot.domain),
+            format!("Nome do computador: {}", self.snapshot.hostname),
+            format!("Domínio: {}", self.snapshot.domain),
         ];
 
         if self.hostname_enabled {
-            lines.push(format!("Change hostname to: {}", self.hostname_target));
+            lines.push(format!("Novo nome: {}", self.hostname_target));
         }
 
         if self.password_enabled {
             lines.push(format!(
-                "Set password for {}: {}",
-                PREFEITURA_USER,
+                "Senha da Prefeitura: {}",
                 mask_text(&self.password_value)
             ));
         }
 
         if self.domain_enabled {
-            lines.push(format!("Join domain: {}", DOMAIN_TARGET));
+            lines.push(format!("Domínio de destino: {}", self.domain_target));
         }
 
         lines
@@ -200,11 +205,11 @@ impl AppState {
         let mut warnings = Vec::new();
 
         if self.hostname_enabled {
-            warnings.push("Hostname change may require a reboot.");
+            warnings.push("Alteração do nome pode exigir reinicialização.");
         }
 
         if self.domain_enabled {
-            warnings.push("Domain join may require a reboot or rejoin flow.");
+            warnings.push("Alteração de domínio pode exigir reinicialização ou novo fluxo.");
         }
 
         warnings
@@ -254,12 +259,46 @@ mod tests {
         state.password_enabled = true;
         state.password_value = String::from("secret123");
         state.domain_enabled = true;
+        state.domain_target = String::from("demo.local");
 
         let lines = state.summary_lines();
 
         assert!(lines.iter().any(|line| line.contains("PC-02")));
         assert!(lines.iter().any(|line| line.contains("Prefeitura")));
-        assert!(lines.iter().any(|line| line.contains(DOMAIN_TARGET)));
+        assert!(lines.iter().any(|line| line.contains("demo.local")));
+    }
+
+    #[test]
+    fn domain_defaults_but_can_change() {
+        let mut state = AppState::new(snapshot());
+
+        assert_eq!(state.domain_target, DOMAIN_TARGET);
+
+        state.domain_enabled = true;
+        state.domain_target = String::from("demo.local");
+
+        let plan = state.selected_plan().unwrap();
+        assert_eq!(plan.domain.as_deref(), Some("demo.local"));
+    }
+
+    #[test]
+    fn statuses_are_localized_to_portuguese() {
+        let mut state = AppState::new(snapshot());
+
+        assert_eq!(state.status, "Pronto.");
+
+        state.begin_input(InputKind::Hostname);
+        assert_eq!(state.status, "Informe o novo nome do computador.");
+
+        state.cancel_input();
+        assert_eq!(state.status, "Modo de edição.");
+
+        state.toggle_focused();
+        assert_eq!(state.status, "Seleção atualizada.");
+
+        state.input_buffer = String::from("PC-02");
+        state.commit_input(InputKind::Hostname);
+        assert_eq!(state.status, "Destino atualizado.");
     }
 
     #[test]
