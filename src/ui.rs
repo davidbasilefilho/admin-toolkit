@@ -31,18 +31,12 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
             Constraint::Length(5),
             Constraint::Min(8),
             Constraint::Length(3),
-            Constraint::Length(3),
         ])
         .split(frame.area());
 
     render_snapshot(frame, chunks[0], state);
     render_actions(frame, chunks[1], state);
-    render_status(frame, chunks[2], &state.status);
-    render_footer(
-        frame,
-        chunks[3],
-        "↑↓ mover  espaço alternar  e editar  enter confirmar  q sair",
-    );
+    render_shortcuts(frame, chunks[2]);
 }
 
 fn render_input(frame: &mut Frame<'_>, state: &AppState, kind: InputKind) {
@@ -56,7 +50,7 @@ fn render_input(frame: &mut Frame<'_>, state: &AppState, kind: InputKind) {
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(5),
-            Constraint::Length(7),
+            Constraint::Min(7),
             Constraint::Length(3),
         ])
         .split(frame.area());
@@ -87,11 +81,7 @@ fn render_input(frame: &mut Frame<'_>, state: &AppState, kind: InputKind) {
     );
     frame.render_widget(input, chunks[1]);
 
-    render_status(
-        frame,
-        chunks[2],
-        "enter salvar  esc cancelar  backspace apagar",
-    );
+    render_shortcuts(frame, chunks[2]);
 }
 
 fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
@@ -285,7 +275,7 @@ fn action_item(label: &str, enabled: bool, focused: bool, note: Option<&str>) ->
 
     let mut item = ListItem::new(Line::from(spans));
     if focused {
-        item = item.style(Style::default().fg(TEXT).add_modifier(Modifier::BOLD));
+        item = item.style(Style::default().fg(CYAN).add_modifier(Modifier::BOLD));
     } else if enabled {
         item = item.style(Style::default().fg(GREEN));
     }
@@ -311,6 +301,17 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect, text: &str) {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(BLUE)),
     );
+    frame.render_widget(footer, area);
+}
+
+fn render_shortcuts(frame: &mut Frame<'_>, area: Rect) {
+    let footer = Paragraph::new("↑↓ mover  espaço alternar  e editar  enter confirmar  q sair")
+        .alignment(Alignment::Center)
+        .block(
+            Block::default()
+                .borders(Borders::ALL)
+                .border_style(Style::default().fg(YELLOW)),
+        );
     frame.render_widget(footer, area);
 }
 
