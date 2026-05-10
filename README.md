@@ -18,8 +18,6 @@ I chose Rust for three reasons that mattered in that environment:
 
 **Mature TUI ecosystem.** At the time I started, `ratatui` (formerly `tui-rs`) was already a robust, well-maintained library for building terminal user interfaces in Rust. It gave me keyboard handling, layout primitives, and styling without the overhead of a GUI framework — exactly what I needed for a tool that lives in the console.
 
-There were personal reasons too: I wanted to learn Rust properly, and building something I actually needed was the best way to do it. The compiler caught my mistakes before they became runtime bugs, which was reassuring when I was still learning the language.
-
 ## What it does
 
 - Shows current hostname and domain.
