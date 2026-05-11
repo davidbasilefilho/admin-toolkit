@@ -1,4 +1,6 @@
-use crate::state::{AppState, DOMAIN_TARGET, Focus, InputKind, PREFEITURA_USER, Screen, mask_text};
+use std::borrow::Cow;
+
+use crate::state::{AppState, DOMAIN_TARGET, Focus, InputKind, Screen, mask_text};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
@@ -41,9 +43,9 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
 
 fn render_input(frame: &mut Frame<'_>, state: &AppState, kind: InputKind) {
     let title = match kind {
-        InputKind::Hostname => String::from("Destino do nome do computador"),
-        InputKind::Password => format!("Destino da senha da {}", PREFEITURA_USER),
-        InputKind::Domain => String::from("Destino do domínio"),
+        InputKind::Hostname => "Destino do nome do computador",
+        InputKind::Password => "Destino da senha da Prefeitura",
+        InputKind::Domain => "Destino do domínio",
     };
 
     let chunks = Layout::default()
@@ -58,9 +60,9 @@ fn render_input(frame: &mut Frame<'_>, state: &AppState, kind: InputKind) {
     render_snapshot(frame, chunks[0], state);
 
     let content = match kind {
-        InputKind::Hostname => state.input_buffer.clone(),
-        InputKind::Password => mask_text(&state.input_buffer),
-        InputKind::Domain => state.input_buffer.clone(),
+        InputKind::Hostname => Cow::Borrowed(state.input_buffer.as_str()),
+        InputKind::Password => Cow::Owned(mask_text(&state.input_buffer)),
+        InputKind::Domain => Cow::Borrowed(state.input_buffer.as_str()),
     };
 
     let input = Paragraph::new(vec![
@@ -107,10 +109,13 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
         Paragraph::new(summary).block(Block::default().borders(Borders::ALL).title("Confirmar"));
     frame.render_widget(confirm, chunks[1]);
 
-    let warnings = if state.warnings().is_empty() {
-        String::from("Sem aviso de reinicialização.")
-    } else {
-        state.warnings().join(" • ")
+    let warnings = {
+        let warnings = state.warnings();
+        if warnings.is_empty() {
+            String::from("Sem aviso de reinicialização.")
+        } else {
+            warnings.join(" • ")
+        }
     };
 
     render_status(frame, chunks[2], &warnings);
@@ -260,17 +265,18 @@ fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     frame.render_widget(list, area);
 }
 
-fn action_item(label: &str, enabled: bool, focused: bool, note: Option<&str>) -> ListItem<'static> {
+fn action_item<'a>(
+    label: &'a str,
+    enabled: bool,
+    focused: bool,
+    note: Option<&'a str>,
+) -> ListItem<'a> {
     let marker = if enabled { "[x]" } else { "[ ]" };
-    let mut spans = vec![
-        Span::raw(marker),
-        Span::raw(" "),
-        Span::raw(label.to_string()),
-    ];
+    let mut spans = vec![Span::raw(marker), Span::raw(" "), Span::raw(label)];
 
     if let Some(note) = note {
         spans.push(Span::raw(" - "));
-        spans.push(Span::styled(note.to_string(), Style::default().fg(MUTED)));
+        spans.push(Span::styled(note, Style::default().fg(MUTED)));
     }
 
     let mut item = ListItem::new(Line::from(spans));
