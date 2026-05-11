@@ -14,6 +14,7 @@ use crate::ui;
 use crate::windows_ops::{ApplyOutcome, RealWindowsOps, WindowsOps};
 
 const POLL_INTERVAL: Duration = Duration::from_millis(100);
+const MAX_INPUT_CHARS: usize = 512;
 
 pub fn run_app() -> io::Result<()> {
     let ops = RealWindowsOps::new();
@@ -157,7 +158,9 @@ impl<Ops: WindowsOps> App<Ops> {
                 Ok(false)
             }
             KeyCode::Char(ch) => {
-                self.state.input_buffer.push(ch);
+                if !ch.is_control() && self.state.input_buffer.chars().count() < MAX_INPUT_CHARS {
+                    self.state.input_buffer.push(ch);
+                }
                 Ok(false)
             }
             _ => Ok(false),
@@ -319,5 +322,19 @@ mod tests {
 
         assert_eq!(app.state.domain_target, "itu.local");
         assert!(matches!(app.state.screen, Screen::Edit));
+    }
+
+    #[test]
+    fn input_buffer_is_capped() {
+        let mut app = app();
+
+        app.state.hostname_enabled = true;
+        app.handle_key(KeyCode::Enter).unwrap();
+
+        for _ in 0..(MAX_INPUT_CHARS + 100) {
+            app.handle_key(KeyCode::Char('a')).unwrap();
+        }
+
+        assert_eq!(app.state.input_buffer.chars().count(), MAX_INPUT_CHARS);
     }
 }
