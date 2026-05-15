@@ -16,10 +16,17 @@ fn outer_frame<'a>(theme: &Theme) -> Block<'a> {
         .border_style(Style::default().fg(theme.border_frame))
 }
 
-fn panel<'a>(_title: &'a str, theme: &Theme) -> Block<'a> {
+fn panel<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
     Block::bordered()
         .border_type(BorderType::Thick)
         .border_style(Style::default().fg(theme.border_panel))
+        .style(Style::default().bg(theme.bg))
+        .title(title)
+        .title_style(
+            Style::default()
+                .fg(theme.accent)
+                .add_modifier(Modifier::BOLD),
+        )
 }
 
 // ── Separators ──
@@ -43,7 +50,7 @@ fn thin_sep(frame: &mut Frame<'_>, area: Rect, theme: &Theme) {
 // ── Public entry ──
 
 pub fn render(frame: &mut Frame<'_>, state: &AppState, form: Option<&Form>) {
-    let theme = Theme::dark_high_contrast();
+    let theme = Theme::cohesive_dark();
 
     match state.screen {
         Screen::Edit => render_edit(frame, state, &theme),
@@ -93,7 +100,7 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
         Span::styled(
             "admin-toolkit",
             Style::default()
-                .fg(theme.fg_main)
+                .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled("v1.4.0", Style::default().fg(theme.fg_dim)),
@@ -127,7 +134,9 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
         thin_sep(frame, chunks[status_sep], theme);
         let status_line = Paragraph::new(Line::from(Span::styled(
             &state.status,
-            Style::default().fg(theme.status_warning),
+            Style::default()
+                .fg(theme.status_warning)
+                .add_modifier(Modifier::BOLD),
         )));
         frame.render_widget(status_line, chunks[status_area]);
     }
@@ -170,7 +179,10 @@ fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, th
                     .add_modifier(Modifier::BOLD),
             ),
         ]),
-        Line::from(""),
+        Line::from(Span::styled(
+            "─".repeat(area.width.saturating_sub(1) as usize),
+            Style::default().fg(theme.border_panel),
+        )),
     ];
 
     lines.push(Line::from(vec![
@@ -178,7 +190,10 @@ fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, th
             format!("{:<w_col$}", "hostname", w_col = w_col),
             Style::default().fg(theme.fg_dim),
         ),
-        Span::styled(&state.snapshot.hostname, Style::default().fg(theme.fg_main)),
+        Span::styled(
+            &state.snapshot.hostname,
+            Style::default().fg(theme.fg_main),
+        ),
     ]));
 
     lines.push(Line::from(vec![
@@ -191,23 +206,17 @@ fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, th
         Span::styled(DOMAIN_TARGET, Style::default().fg(theme.accent)),
     ]));
 
+    let (admin_label, admin_style) = if state.snapshot.elevated {
+        ("Sim", Style::default().fg(theme.status_success))
+    } else {
+        ("Não", Style::default().fg(theme.status_error))
+    };
     lines.push(Line::from(vec![
         Span::styled(
             format!("{:<w_col$}", "admin", w_col = w_col),
             Style::default().fg(theme.fg_dim),
         ),
-        Span::styled(
-            if state.snapshot.elevated {
-                "Sim"
-            } else {
-                "Não"
-            },
-            if state.snapshot.elevated {
-                Style::default().fg(theme.status_success)
-            } else {
-                Style::default().fg(theme.status_error)
-            },
-        ),
+        Span::styled(admin_label, admin_style.add_modifier(Modifier::BOLD)),
     ]));
 
     if state.hostname_enabled && !state.hostname_target.is_empty() {
@@ -216,7 +225,12 @@ fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, th
                 format!("{:<w_col$}", "novo hostname", w_col = w_col),
                 Style::default().fg(theme.fg_dim),
             ),
-            Span::styled(&state.hostname_target, Style::default().fg(theme.fg_main)),
+            Span::styled(
+                &state.hostname_target,
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
+            ),
         ]));
     }
     if state.create_user_enabled && !state.create_user_username.is_empty() {
@@ -227,7 +241,9 @@ fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, th
             ),
             Span::styled(
                 &state.create_user_username,
-                Style::default().fg(theme.fg_main),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]));
     }
@@ -244,6 +260,7 @@ fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, t
             state.hostname_enabled,
             matches!(state.focus, Focus::Hostname),
             state.hostname_target.as_str(),
+            !state.hostname_target.is_empty(),
         ),
         (
             "Alterar senha da Prefeitura",
@@ -254,12 +271,14 @@ fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, t
             } else {
                 "senha definida"
             },
+            !state.password_value.is_empty(),
         ),
         (
             "Alterar domínio para itu.local",
             state.domain_enabled,
             matches!(state.focus, Focus::Domain),
             state.domain_target.as_str(),
+            !state.domain_target.is_empty(),
         ),
         (
             "Criar usuário",
@@ -270,10 +289,11 @@ fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, t
             } else {
                 state.create_user_username.as_str()
             },
+            !state.create_user_username.is_empty(),
         ),
     ];
 
-    for (label, enabled, focused, note) in &rows {
+    for (label, enabled, focused, note, has_value) in &rows {
         let marker = if *enabled { "[x]" } else { "[ ]" };
         let marker_style = if *enabled {
             Style::default().fg(theme.status_success)
@@ -299,9 +319,16 @@ fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, t
         ];
 
         if *enabled && !note.is_empty() {
+            let note_style = if *focused {
+                Style::default().fg(theme.fg_dim)
+            } else if *has_value {
+                Style::default().fg(theme.accent)
+            } else {
+                Style::default().fg(theme.status_warning)
+            };
             spans.push(Span::styled(
                 format!("  [{}]", note),
-                Style::default().fg(theme.fg_dim),
+                note_style.add_modifier(Modifier::ITALIC),
             ));
         }
 
@@ -337,6 +364,30 @@ fn render_input(frame: &mut Frame<'_>, _kind: InputKind, form: Option<&Form>, th
 
 // ── Confirm screen ──
 
+fn styled_summary_line(line: &str, theme: &Theme) -> Line<'static> {
+    if let Some((label, value)) = line.split_once(": ") {
+        Line::from(vec![
+            Span::styled("  ", Style::default()),
+            Span::styled(
+                format!("{}:", label),
+                Style::default().fg(theme.fg_dim),
+            ),
+            Span::raw(" "),
+            Span::styled(
+                value.to_string(),
+                Style::default()
+                    .fg(theme.fg_main)
+                    .add_modifier(Modifier::BOLD),
+            ),
+        ])
+    } else {
+        Line::from(vec![Span::styled(
+            format!("  {}", line),
+            Style::default().fg(theme.fg_main),
+        )])
+    }
+}
+
 fn render_confirm(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
@@ -360,7 +411,7 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
         Span::styled(
             "admin-toolkit",
             Style::default()
-                .fg(theme.fg_main)
+                .fg(theme.accent)
                 .add_modifier(Modifier::BOLD),
         ),
         Span::styled("v1.4.0", Style::default().fg(theme.fg_dim)),
@@ -375,17 +426,11 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     )));
     frame.render_widget(subtitle, chunks[1]);
 
-    let mut lines = state
+    let lines: Vec<Line> = state
         .summary_lines()
         .into_iter()
-        .map(Line::from)
-        .collect::<Vec<_>>();
-    for line in &mut lines {
-        let spans = line.spans.clone();
-        if !spans.is_empty() {
-            line.spans.insert(0, Span::styled("  ", Style::default()));
-        }
-    }
+        .map(|s| styled_summary_line(&s, theme))
+        .collect();
     frame.render_widget(Paragraph::new(lines), chunks[2]);
 
     let warn = state.warnings();
@@ -395,7 +440,9 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
             .map(|w| {
                 Line::from(Span::styled(
                     format!("  ⚠ {}", w),
-                    Style::default().fg(theme.status_warning),
+                    Style::default()
+                        .fg(theme.status_warning)
+                        .add_modifier(Modifier::BOLD),
                 ))
             })
             .collect();
@@ -456,9 +503,17 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     ])
     .split(inner);
 
+    let success = state.reboot_required
+        || state.result_message.contains("sucesso")
+        || state.result_message.contains("Applied");
+
     let mut lines = vec![Line::from(Span::styled(
         &state.result_message,
-        Style::default().fg(theme.fg_main),
+        Style::default().fg(if success {
+            theme.status_success
+        } else {
+            theme.status_error
+        }),
     ))];
     if state.reboot_required {
         lines.push(Line::from(""));

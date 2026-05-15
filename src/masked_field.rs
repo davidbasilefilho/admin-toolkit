@@ -263,8 +263,8 @@ impl PasswordField {
             if cursor_x < area.x + area.width {
                 buf[(cursor_x, area.y)].set_style(
                     Style::default()
-                        .bg(Color::White)
-                        .fg(Color::Black)
+                        .bg(Color::Rgb(0x7A, 0xA2, 0xF7))
+                        .fg(Color::Rgb(0x1E, 0x22, 0x33))
                         .add_modifier(Modifier::SLOW_BLINK),
                 );
             }
