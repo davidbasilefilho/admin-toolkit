@@ -23,46 +23,84 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState, form: Option<&Form>) {
     }
 }
 
-// ── Layout helpers ──
+// ── Layout ──
 
-/// Splits area into [header, body, separator, footer] with 2-char padding on sides.
-fn padded_body(area: Rect) -> (Rect, Rect, Rect, Rect) {
-    let inner = Layout::horizontal([
-        Constraint::Length(2),
-        Constraint::Min(10),
-        Constraint::Length(2),
-    ])
-    .split(area)[1];
-
-    let chunks = Layout::vertical([
-        Constraint::Length(1),
-        Constraint::Min(8),
-        Constraint::Length(1),
-        Constraint::Length(1),
-    ])
-    .split(inner);
-
-    (chunks[0], chunks[1], chunks[2], chunks[3])
+fn full_sep(area: Rect) -> Rect {
+    // Separator spans full terminal width
+    let sep = Layout::horizontal([Constraint::Min(1)]).split(area);
+    sep[0]
 }
 
-/// Full-width separator area (fills padded width).
-fn sep_area(outer: Rect) -> Rect {
-    Layout::horizontal([
-        Constraint::Length(2),
-        Constraint::Min(1),
-        Constraint::Length(2),
-    ])
-    .split(outer)[1]
+fn pad(area: Rect) -> Rect {
+    Layout::horizontal([Constraint::Length(2), Constraint::Min(1), Constraint::Length(2)])
+        .split(area)[1]
 }
 
 // ── Edit screen ──
 
 fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
-    let (hdr, body, sep, ftr) = padded_body(frame.area());
-    render_header(frame, hdr);
-    render_body(frame, body, state);
-    render_sep(frame, sep);
-    render_footer(frame, ftr);
+    // Full-width layout: header | sep | body | sep | footer
+    let chunks = Layout::vertical([
+        Constraint::Length(1),   // header
+        Constraint::Length(1),   // separator
+        Constraint::Min(6),      // body (system + actions + status)
+        Constraint::Length(1),   // separator
+        Constraint::Length(1),   // footer
+    ])
+    .split(frame.area());
+
+    render_header(frame, chunks[0]);
+
+    // Separator between header and body
+    let sep1 = full_sep(chunks[1]);
+    let line = Line::from(Span::styled(
+        "─".repeat(sep1.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line), sep1);
+
+    // Body: system | sep | actions | sep | status
+    let body = pad(chunks[2]);
+    let body_chunks = Layout::vertical([
+        Constraint::Length(4),   // system
+        Constraint::Length(1),   // separator
+        Constraint::Min(3),      // actions
+        Constraint::Length(1),   // separator
+        Constraint::Length(1),   // status
+    ])
+    .split(body);
+
+    render_system(frame, body_chunks[0], state);
+
+    // Separator between system and actions (full width)
+    let sep_a = full_sep(body_chunks[1]);
+    let line_a = Line::from(Span::styled(
+        "─".repeat(sep_a.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line_a), sep_a);
+
+    render_actions(frame, body_chunks[2], state);
+
+    // Separator between actions and status (full width)
+    let sep_b = full_sep(body_chunks[3]);
+    let line_b = Line::from(Span::styled(
+        "─".repeat(sep_b.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line_b), sep_b);
+
+    render_status(frame, body_chunks[4], &state.status);
+
+    // Footer separator (full width)
+    let sep2 = full_sep(chunks[3]);
+    let line2 = Line::from(Span::styled(
+        "─".repeat(sep2.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line2), sep2);
+
+    render_footer(frame, chunks[4]);
 }
 
 fn render_header(frame: &mut Frame<'_>, area: Rect) {
@@ -71,40 +109,12 @@ fn render_header(frame: &mut Frame<'_>, area: Rect) {
         Span::raw("  "),
         Span::styled("stage system changes", Style::default().fg(DIM)),
         Span::raw("  "),
-        Span::styled("v1.3.3", Style::default().fg(DIM)),
+        Span::styled("v1.3.4", Style::default().fg(DIM)),
     ]);
     frame.render_widget(Paragraph::new(h), area);
 }
 
-fn render_body(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    let chunks = Layout::vertical([
-        Constraint::Length(6),
-        Constraint::Min(4),
-        Constraint::Length(2),
-    ])
-    .split(area);
-
-    render_system(frame, chunks[0], state);
-    render_actions(frame, chunks[1], state);
-    render_status(frame, chunks[2], &state.status);
-}
-
-fn render_sep(frame: &mut Frame<'_>, area: Rect) {
-    let full = sep_area(area);
-    let line = Line::from(Span::styled(
-        "─".repeat(full.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line), full);
-}
-
 fn render_system(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    let label = Line::from(Span::styled(
-        "── SISTEMA ──",
-        Style::default().fg(DIM).add_modifier(Modifier::BOLD),
-    ));
-    frame.render_widget(Paragraph::new(label), area);
-
     let cols = Layout::horizontal([
         Constraint::Percentage(50),
         Constraint::Percentage(50),
@@ -113,19 +123,23 @@ fn render_system(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
 
     let w = 10usize;
 
-    // Atual (current)
+    // Atual
     let left = vec![
-        Line::from(Span::styled("  Atual", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD))),
+        Line::from(Span::styled(
+            "Atual",
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
         Line::from(vec![
-            Span::styled(format!("  {:<w$}", "hostname", w = w), Style::default().fg(DIM)),
+            Span::styled(format!("{:<w$}", "hostname", w = w), Style::default().fg(DIM)),
             Span::styled(&state.snapshot.hostname, Style::default().fg(WHITE)),
         ]),
         Line::from(vec![
-            Span::styled(format!("  {:<w$}", "domínio", w = w), Style::default().fg(DIM)),
+            Span::styled(format!("{:<w$}", "domínio", w = w), Style::default().fg(DIM)),
             Span::styled(&state.snapshot.domain, Style::default().fg(WHITE)),
         ]),
         Line::from(vec![
-            Span::styled(format!("  {:<w$}", "admin", w = w), Style::default().fg(DIM)),
+            Span::styled(format!("{:<w$}", "admin", w = w), Style::default().fg(DIM)),
             Span::styled(
                 if state.snapshot.elevated { "Sim" } else { "Não" },
                 if state.snapshot.elevated {
@@ -138,48 +152,44 @@ fn render_system(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     ];
     frame.render_widget(Paragraph::new(left), cols[0]);
 
-    // Destino (target)
-    let mut right_spans: Vec<Vec<Span>> = vec![
-        vec![Span::styled("  Destino", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD))],
-        vec![
-            Span::styled(format!("  {:<w$}", "domínio", w = w), Style::default().fg(DIM)),
+    // Destino
+    let mut right = vec![
+        Line::from(Span::styled(
+            "Destino",
+            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+        )),
+        Line::from(""),
+        Line::from(vec![
+            Span::styled(format!("{:<w$}", "domínio", w = w), Style::default().fg(DIM)),
             Span::styled(DOMAIN_TARGET, Style::default().fg(ACCENT)),
-        ],
+        ]),
     ];
 
     if state.hostname_enabled && !state.hostname_target.is_empty() {
-        right_spans.push(vec![
-            Span::styled(format!("  {:<w$}", "hostname", w = w), Style::default().fg(DIM)),
+        right.push(Line::from(vec![
+            Span::styled(format!("{:<w$}", "hostname", w = w), Style::default().fg(DIM)),
             Span::styled(&state.hostname_target, Style::default().fg(WHITE)),
-        ]);
+        ]));
     }
     if state.create_user_enabled && !state.create_user_username.is_empty() {
-        right_spans.push(vec![
-            Span::styled(format!("  {:<w$}", "usuário", w = w), Style::default().fg(DIM)),
+        right.push(Line::from(vec![
+            Span::styled(format!("{:<w$}", "usuário", w = w), Style::default().fg(DIM)),
             Span::styled(&state.create_user_username, Style::default().fg(WHITE)),
-        ]);
+        ]));
     }
 
-    frame.render_widget(
-        Paragraph::new(right_spans.into_iter().map(Line::from).collect::<Vec<_>>()),
-        cols[1],
-    );
+    frame.render_widget(Paragraph::new(right), cols[1]);
 }
 
 fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    let mut lines = Vec::new();
-
-    lines.push(Line::from(Span::styled(
-        "── AÇÕES ──",
-        Style::default().fg(DIM).add_modifier(Modifier::BOLD),
-    )));
-
     let rows = [
         ("Alterar nome do computador", state.hostname_enabled, matches!(state.focus, Focus::Hostname), state.hostname_target.as_str()),
         ("Alterar senha da Prefeitura", state.password_enabled, matches!(state.focus, Focus::Password), if state.password_value.is_empty() { "precisa de senha" } else { "senha definida" }),
         ("Alterar domínio para itu.local", state.domain_enabled, matches!(state.focus, Focus::Domain), state.domain_target.as_str()),
         ("Criar usuário", state.create_user_enabled, matches!(state.focus, Focus::CreateUser), if state.create_user_username.is_empty() { "precisa de nome" } else { state.create_user_username.as_str() }),
     ];
+
+    let mut lines = Vec::new();
 
     for (label, enabled, focused, note) in &rows {
         let marker = if *enabled { "[x]" } else { "[ ]" };
@@ -197,28 +207,27 @@ fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
             Style::default().fg(DIM)
         };
 
-        let mut row_spans = vec![
-            Span::raw("  "),
+        let mut spans = vec![
             Span::styled(marker, marker_style),
             Span::raw(" "),
             Span::styled(*label, label_style),
         ];
 
         if *enabled && !note.is_empty() {
-            row_spans.push(Span::styled(format!("  [{}]", note), Style::default().fg(DIM)));
+            spans.push(Span::styled(format!("  [{}]", note), Style::default().fg(DIM)));
         }
 
-        lines.push(Line::from(row_spans));
+        lines.push(Line::from(spans));
     }
+
+    // Add blank line after actions for spacing from edge
+    lines.push(Line::from(""));
 
     frame.render_widget(Paragraph::new(lines), area);
 }
 
 fn render_status(frame: &mut Frame<'_>, area: Rect, text: &str) {
-    let line = Line::from(vec![
-        Span::styled("── STATUS ── ", Style::default().fg(DIM).add_modifier(Modifier::BOLD)),
-        Span::styled(text, Style::default().fg(YELLOW)),
-    ]);
+    let line = Line::from(Span::styled(text, Style::default().fg(YELLOW)));
     frame.render_widget(Paragraph::new(line), area);
 }
 
@@ -248,41 +257,61 @@ fn render_input(frame: &mut Frame<'_>, _state: &AppState, _kind: InputKind, form
 // ── Confirm screen ──
 
 fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
-    let (hdr, body, sep, ftr) = padded_body(frame.area());
-    render_header(frame, hdr);
+    let chunks = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(2),
+        Constraint::Length(2),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(frame.area());
+
+    render_header(frame, chunks[0]);
+
+    let sep = full_sep(chunks[1]);
+    let line = Line::from(Span::styled(
+        "─".repeat(sep.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line), sep);
 
     let mut lines = state.summary_lines().into_iter().map(Line::from).collect::<Vec<_>>();
-    lines.insert(0, Line::from(Span::styled(
-        "── REVISÃO ──",
-        Style::default().fg(DIM).add_modifier(Modifier::BOLD),
-    )));
     for line in &mut lines {
         let spans = line.spans.clone();
         if !spans.is_empty() {
             line.spans.insert(0, Span::raw("  "));
         }
     }
-    frame.render_widget(Paragraph::new(lines), body);
+    frame.render_widget(Paragraph::new(lines), pad(chunks[2]));
 
-    render_sep(frame, sep);
-
+    // Warnings
     let warn = state.warnings();
-    let warn_text = if warn.is_empty() {
-        String::from("Nenhum aviso.")
-    } else {
-        warn.join(" • ")
-    };
-    let w = Line::from(vec![
-        Span::styled("── STATUS ── ", Style::default().fg(DIM).add_modifier(Modifier::BOLD)),
-        Span::styled(warn_text, Style::default().fg(YELLOW)),
-    ]);
-    frame.render_widget(Paragraph::new(w), ftr);
+    if !warn.is_empty() {
+        let warn_lines: Vec<Line> = warn
+            .iter()
+            .map(|w| {
+                Line::from(Span::styled(
+                    format!("  {}", w),
+                    Style::default().fg(YELLOW),
+                ))
+            })
+            .collect();
+        frame.render_widget(Paragraph::new(warn_lines), pad(chunks[3]));
+    }
+
+    let sep2 = full_sep(chunks[4]);
+    let line2 = Line::from(Span::styled(
+        "─".repeat(sep2.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line2), sep2);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter aplicar  esc voltar",
         Style::default().fg(DIM),
     )));
-    frame.render_widget(help, ftr);
+    frame.render_widget(help, chunks[5]);
 }
 
 // ── Blocked screen ──
@@ -305,27 +334,49 @@ fn render_blocked(frame: &mut Frame<'_>, state: &AppState) {
 // ── Result screen ──
 
 fn render_result(frame: &mut Frame<'_>, state: &AppState) {
-    let (hdr, body, sep, ftr) = padded_body(frame.area());
-    render_header(frame, hdr);
+    let chunks = Layout::vertical([
+        Constraint::Length(1),
+        Constraint::Length(1),
+        Constraint::Min(2),
+        Constraint::Length(1),
+        Constraint::Length(1),
+    ])
+    .split(frame.area());
 
-    let mut lines = vec![Line::from(vec![
-        Span::styled("── RESULTADO ── ", Style::default().fg(DIM).add_modifier(Modifier::BOLD)),
-        Span::styled(&state.result_message, Style::default().fg(WHITE)),
-    ])];
+    render_header(frame, chunks[0]);
+
+    let sep = full_sep(chunks[1]);
+    let line = Line::from(Span::styled(
+        "─".repeat(sep.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line), sep);
+
+    let mut lines = vec![Line::from(Span::styled(
+        &state.result_message,
+        Style::default().fg(WHITE),
+    ))];
     if state.reboot_required {
+        lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
-            "  Reinicialização necessária.",
+            "Reinicialização necessária.",
             Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
         )));
     }
-    frame.render_widget(Paragraph::new(lines), body);
-    render_sep(frame, sep);
+    frame.render_widget(Paragraph::new(lines), pad(chunks[2]));
+
+    let sep2 = full_sep(chunks[3]);
+    let line2 = Line::from(Span::styled(
+        "─".repeat(sep2.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line2), sep2);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter voltar  q sair",
         Style::default().fg(DIM),
     )));
-    frame.render_widget(help, ftr);
+    frame.render_widget(help, chunks[4]);
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {
