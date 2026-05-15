@@ -7,11 +7,15 @@ use ratatui::widgets::Paragraph;
 use crate::state::{AppState, DOMAIN_TARGET, Focus, InputKind, Screen};
 use ratatui_form::Form;
 
+const BG_BAR: Color = Color::DarkGray;
+const FG_INVERT: Color = Color::Black;
+const BG_INVERT: Color = Color::White;
 const ACCENT: Color = Color::Cyan;
 const DIM: Color = Color::DarkGray;
 const GREEN: Color = Color::Green;
 const WHITE: Color = Color::White;
 const YELLOW: Color = Color::Yellow;
+const RED: Color = Color::Red;
 
 pub fn render(frame: &mut Frame<'_>, state: &AppState, form: Option<&Form>) {
     match state.screen {
@@ -23,19 +27,19 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState, form: Option<&Form>) {
     }
 }
 
-// ── Layout helpers ──
+// ── Helpers ──
 
 fn pad(area: Rect) -> Rect {
     Layout::horizontal([Constraint::Length(2), Constraint::Min(1), Constraint::Length(2)])
         .split(area)[1]
 }
 
-fn render_full_sep(frame: &mut Frame<'_>, area: Rect) {
-    let line = Line::from(Span::styled(
-        "─".repeat(area.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line), area);
+fn fill_bar(frame: &mut Frame<'_>, area: Rect, bg: Color) {
+    let p = Paragraph::new(Line::from(Span::styled(
+        " ".repeat(area.width as usize),
+        Style::default().fg(bg).bg(bg),
+    )));
+    frame.render_widget(p, area);
 }
 
 // ── Edit screen ──
@@ -45,7 +49,7 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     let has_status = !state.status.is_empty();
 
     let outer = Layout::vertical([
-        Constraint::Length(1),   // header
+        Constraint::Length(1),   // header bar
         Constraint::Length(1),   // separator
         Constraint::Min(6),      // body
         Constraint::Length(1),   // footer separator
@@ -54,8 +58,8 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     ])
     .split(area);
 
-    render_header(frame, outer[0]);
-    render_full_sep(frame, outer[1]);
+    render_header_bar(frame, outer[0]);
+    fill_bar(frame, outer[1], BG_BAR);
 
     let body = outer[2];
     let mut body_parts = vec![
@@ -64,36 +68,38 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
         Constraint::Min(3),      // actions
     ];
     if has_status {
-        body_parts.push(Constraint::Length(1)); // separator
-        body_parts.push(Constraint::Length(1)); // status
+        body_parts.push(Constraint::Length(1));
+        body_parts.push(Constraint::Length(1));
     }
     let body_chunks = Layout::vertical(body_parts).split(body);
 
     render_system(frame, pad(body_chunks[0]), state);
-    render_full_sep(frame, body_chunks[1]);
+    fill_bar(frame, body_chunks[1], BG_BAR);
     render_actions(frame, pad(body_chunks[2]), state);
 
     if has_status {
-        render_full_sep(frame, body_chunks[3]);
+        fill_bar(frame, body_chunks[3], BG_BAR);
         render_status(frame, pad(body_chunks[4]), &state.status);
     }
 
-    render_full_sep(frame, outer[3]);
+    fill_bar(frame, outer[3], BG_BAR);
     render_footer(frame, pad(outer[4]));
 }
 
-fn render_header(frame: &mut Frame<'_>, area: Rect) {
-    let h = Line::from(Span::styled(
-        "  admin-toolkit  alterações em lote do sistema",
-        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-    ));
-    frame.render_widget(Paragraph::new(h), pad(area));
+fn render_header_bar(frame: &mut Frame<'_>, area: Rect) {
+    let p = Paragraph::new(Line::from(Span::styled(
+        " admin-toolkit  alterações em lote do sistema",
+        Style::default()
+            .fg(FG_INVERT)
+            .bg(BG_INVERT)
+            .add_modifier(Modifier::BOLD),
+    )));
+    frame.render_widget(p, area);
 }
 
 fn render_system(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     let w_col = 12usize;
 
-    // Build rows: each line has left value + optional right value
     let mut lines = vec![
         Line::from(vec![
             Span::styled(
@@ -105,51 +111,47 @@ fn render_system(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
         Line::from(""),
     ];
 
-    // Row: hostname
     lines.push(Line::from(vec![
         Span::styled(format!("{:<w_col$}", "hostname", w_col = w_col), Style::default().fg(DIM)),
         Span::styled(&state.snapshot.hostname, Style::default().fg(WHITE)),
     ]));
 
-    // Row: domínio (always shows current + target)
-    let row = vec![
+    lines.push(Line::from(vec![
         Span::styled(format!("{:<w_col$}", "domínio", w_col = w_col), Style::default().fg(DIM)),
         Span::styled(&state.snapshot.domain, Style::default().fg(WHITE)),
         Span::raw("  "),
         Span::styled(DOMAIN_TARGET, Style::default().fg(ACCENT)),
-    ];
-    lines.push(Line::from(row));
+    ]));
 
-    // Row: admin
-    let row = vec![
+    lines.push(Line::from(vec![
         Span::styled(format!("{:<w_col$}", "admin", w_col = w_col), Style::default().fg(DIM)),
         Span::styled(
             if state.snapshot.elevated { "Sim" } else { "Não" },
             if state.snapshot.elevated {
                 Style::default().fg(GREEN)
             } else {
-                Style::default().fg(Color::Red)
+                Style::default().fg(RED)
             },
         ),
-    ];
-    lines.push(Line::from(row));
+    ]));
 
-    // Row: hostname target (only if staged)
     if state.hostname_enabled && !state.hostname_target.is_empty() {
-        let row = vec![
-            Span::styled(format!("{:<w_col$}", "novo hostname", w_col = w_col), Style::default().fg(DIM)),
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{:<w_col$}", "novo hostname", w_col = w_col),
+                Style::default().fg(DIM),
+            ),
             Span::styled(&state.hostname_target, Style::default().fg(WHITE)),
-        ];
-        lines.push(Line::from(row));
+        ]));
     }
-
-    // Row: create user (only if staged)
     if state.create_user_enabled && !state.create_user_username.is_empty() {
-        let row = vec![
-            Span::styled(format!("{:<w_col$}", "novo usuário", w_col = w_col), Style::default().fg(DIM)),
+        lines.push(Line::from(vec![
+            Span::styled(
+                format!("{:<w_col$}", "novo usuário", w_col = w_col),
+                Style::default().fg(DIM),
+            ),
             Span::styled(&state.create_user_username, Style::default().fg(WHITE)),
-        ];
-        lines.push(Line::from(row));
+        ]));
     }
 
     frame.render_widget(Paragraph::new(lines), area);
@@ -160,7 +162,7 @@ fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
 
     lines.push(Line::from(Span::styled(
         "AÇÕES",
-        Style::default().fg(DIM).add_modifier(Modifier::BOLD),
+        Style::default().fg(WHITE).add_modifier(Modifier::BOLD),
     )));
 
     let rows = [
@@ -178,10 +180,10 @@ fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
             Style::default().fg(DIM)
         };
 
-        let label_style = if *focused {
-            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)
+        let base_style = if *focused {
+            Style::default().fg(WHITE).bg(BG_BAR).add_modifier(Modifier::BOLD)
         } else if *enabled {
-            Style::default().fg(WHITE)
+            Style::default().fg(ACCENT)
         } else {
             Style::default().fg(DIM)
         };
@@ -189,7 +191,7 @@ fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
         let mut spans = vec![
             Span::styled(marker, marker_style),
             Span::raw(" "),
-            Span::styled(*label, label_style),
+            Span::styled(*label, base_style),
         ];
 
         if *enabled && !note.is_empty() {
@@ -203,21 +205,21 @@ fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
 }
 
 fn render_status(frame: &mut Frame<'_>, area: Rect, text: &str) {
-    let line = Line::from(Span::styled(text, Style::default().fg(YELLOW)));
-    frame.render_widget(Paragraph::new(line), area);
+    let p = Paragraph::new(Line::from(Span::styled(text, Style::default().fg(YELLOW))));
+    frame.render_widget(p, area);
 }
 
 fn render_footer(frame: &mut Frame<'_>, area: Rect) {
-    let shortcuts = "↑↓ navegar  espaço alternar  e editar  enter confirmar  esc voltar  q sair";
-    let p = Paragraph::new(Line::from(Span::styled(shortcuts, Style::default().fg(DIM))));
+    let p = Paragraph::new(Line::from(Span::styled(
+        "↑↓ navegar  espaço alternar  e editar  enter confirmar  esc voltar  q sair",
+        Style::default().fg(DIM),
+    )));
     frame.render_widget(p, area);
 }
 
 // ── Input overlay ──
 
 fn render_input(frame: &mut Frame<'_>, _state: &AppState, _kind: InputKind, form: Option<&Form>) {
-    let area = centered_rect(70, 20, frame.area());
-
     let backdrop = Paragraph::new(Line::from(Span::styled(
         "esc cancelar  enter confirmar",
         Style::default().fg(DIM),
@@ -226,6 +228,7 @@ fn render_input(frame: &mut Frame<'_>, _state: &AppState, _kind: InputKind, form
     frame.render_widget(backdrop, frame.area());
 
     if let Some(form) = form {
+        let area = centered_rect(70, 20, frame.area());
         form.render(area, frame.buffer_mut());
     }
 }
@@ -243,8 +246,8 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
     ])
     .split(frame.area());
 
-    render_header(frame, chunks[0]);
-    render_full_sep(frame, chunks[1]);
+    render_header_bar(frame, chunks[0]);
+    fill_bar(frame, chunks[1], BG_BAR);
 
     let mut lines = state.summary_lines().into_iter().map(Line::from).collect::<Vec<_>>();
     for line in &mut lines {
@@ -259,23 +262,18 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
     if !warn.is_empty() {
         let warn_lines: Vec<Line> = warn
             .iter()
-            .map(|w| {
-                Line::from(Span::styled(
-                    format!("  {}", w),
-                    Style::default().fg(YELLOW),
-                ))
-            })
+            .map(|w| Line::from(Span::styled(format!("  {}", w), Style::default().fg(YELLOW))))
             .collect();
         frame.render_widget(Paragraph::new(warn_lines), pad(chunks[3]));
     }
 
-    render_full_sep(frame, chunks[4]);
+    fill_bar(frame, chunks[4], BG_BAR);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter aplicar  esc voltar",
         Style::default().fg(DIM),
     )));
-    frame.render_widget(help, chunks[5]);
+    frame.render_widget(help, pad(chunks[5]));
 }
 
 // ── Blocked screen ──
@@ -285,7 +283,7 @@ fn render_blocked(frame: &mut Frame<'_>, state: &AppState) {
     let lines = vec![
         Line::from(Span::styled(
             "Privilégios de administrador necessários",
-            Style::default().fg(Color::Red).add_modifier(Modifier::BOLD),
+            Style::default().fg(RED).add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
         Line::from(Span::styled(&state.blocked_reason, Style::default().fg(WHITE))),
@@ -308,8 +306,8 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState) {
     ])
     .split(frame.area());
 
-    render_header(frame, chunks[0]);
-    render_full_sep(frame, chunks[1]);
+    render_header_bar(frame, chunks[0]);
+    fill_bar(frame, chunks[1], BG_BAR);
 
     let mut lines = vec![Line::from(Span::styled(
         &state.result_message,
@@ -324,7 +322,7 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState) {
     }
     frame.render_widget(Paragraph::new(lines), pad(chunks[2]));
 
-    render_full_sep(frame, chunks[3]);
+    fill_bar(frame, chunks[3], BG_BAR);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter voltar  q sair",
