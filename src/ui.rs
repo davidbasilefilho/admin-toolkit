@@ -119,32 +119,30 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
 
     // System info panel
     let sys_panel = panel("Sistema");
-    frame.render_widget(&sys_panel, chunks[1]);
-    let sys_inner = sys_panel.inner(chunks[1]);
+    frame.render_widget(&sys_panel, chunks[2]);
+    let sys_inner = sys_panel.inner(chunks[2]);
     render_system_content(frame, sys_inner, state);
 
     // Actions panel
     let act_panel = panel("Ações");
-    frame.render_widget(&act_panel, chunks[3]);
-    let act_inner = act_panel.inner(chunks[3]);
-    let status_idx = 5;
+    frame.render_widget(&act_panel, chunks[4]);
+    let act_inner = act_panel.inner(chunks[4]);
     render_actions_content(frame, act_inner, state);
 
     // Status row
     if has_status {
-        thin_sep(frame, chunks[status_idx]);
+        let status_sep = sep_idx - 2;
+        let status_area = sep_idx - 1;
+        thin_sep(frame, chunks[status_sep]);
         let status_line = Paragraph::new(Line::from(Span::styled(
             &state.status,
             Style::default().fg(YELLOW),
         )));
-        frame.render_widget(status_line, chunks[status_idx + 1]);
+        frame.render_widget(status_line, chunks[status_area]);
     }
 
-    heavy_sep(frame, chunks[7]);
-    // Footer separator
     heavy_sep(frame, chunks[sep_idx]);
 
-    // Footer
     let footer = Paragraph::new(Line::from(Span::styled(
         "↑↓ navegar  espaço alternar  e editar  enter confirmar  esc voltar  q sair",
         Style::default().fg(FG_DIM),
