@@ -25,12 +25,6 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState, form: Option<&Form>) {
 
 // ── Layout ──
 
-fn full_sep(area: Rect) -> Rect {
-    // Separator spans full terminal width
-    let sep = Layout::horizontal([Constraint::Min(1)]).split(area);
-    sep[0]
-}
-
 fn pad(area: Rect) -> Rect {
     Layout::horizontal([Constraint::Length(2), Constraint::Min(1), Constraint::Length(2)])
         .split(area)[1]
@@ -39,69 +33,56 @@ fn pad(area: Rect) -> Rect {
 // ── Edit screen ──
 
 fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
-    // Full-width layout: header | sep | body | sep | footer | spacer
-    let chunks = Layout::vertical([
+    let area = frame.area();
+    let has_status = !state.status.is_empty();
+
+    // Outer layout: header | sep | body | footer_sep | footer | spacing
+    let outer = Layout::vertical([
         Constraint::Length(1),   // header
         Constraint::Length(1),   // separator
-        Constraint::Min(6),      // body (system + actions + status)
-        Constraint::Length(1),   // separator
+        Constraint::Min(6),      // body (may include status section)
+        Constraint::Length(1),   // footer separator
         Constraint::Length(1),   // footer
-        Constraint::Length(1),   // bottom spacing from edge
+        Constraint::Length(1),   // bottom spacing
     ])
-    .split(frame.area());
+    .split(area);
 
-    render_header(frame, chunks[0]);
+    render_header(frame, outer[0]);
+    render_full_sep(frame, outer[1]);
 
-    // Separator between header and body
-    let sep1 = full_sep(chunks[1]);
-    let line = Line::from(Span::styled(
-        "─".repeat(sep1.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line), sep1);
+    let body = outer[2];
 
-    // Body: system | sep | actions | sep | status
-    let body = pad(chunks[2]);
-    let body_chunks = Layout::vertical([
+    // Body layout: system | sep | actions [+ sep + status]
+    let mut body_parts = vec![
         Constraint::Length(4),   // system
         Constraint::Length(1),   // separator
         Constraint::Min(3),      // actions
-        Constraint::Length(1),   // separator
-        Constraint::Length(1),   // status
-    ])
-    .split(body);
+    ];
+    if has_status {
+        body_parts.push(Constraint::Length(1)); // separator
+        body_parts.push(Constraint::Length(1)); // status
+    }
+    let body_chunks = Layout::vertical(body_parts).split(body);
 
-    render_system(frame, body_chunks[0], state);
+    render_system(frame, pad(body_chunks[0]), state);
+    render_full_sep(frame, body_chunks[1]);
+    render_actions(frame, pad(body_chunks[2]), state);
 
-    // Separator between system and actions (full width)
-    let sep_a = full_sep(body_chunks[1]);
-    let line_a = Line::from(Span::styled(
-        "─".repeat(sep_a.width as usize),
+    if has_status {
+        render_full_sep(frame, body_chunks[3]);
+        render_status(frame, pad(body_chunks[4]), &state.status);
+    }
+
+    render_full_sep(frame, outer[3]);
+    render_footer(frame, pad(outer[4]));
+}
+
+fn render_full_sep(frame: &mut Frame<'_>, area: Rect) {
+    let line = Line::from(Span::styled(
+        "─".repeat(area.width as usize),
         Style::default().fg(DIM),
     ));
-    frame.render_widget(Paragraph::new(line_a), sep_a);
-
-    render_actions(frame, body_chunks[2], state);
-
-    // Separator between actions and status (full width)
-    let sep_b = full_sep(body_chunks[3]);
-    let line_b = Line::from(Span::styled(
-        "─".repeat(sep_b.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line_b), sep_b);
-
-    render_status(frame, body_chunks[4], &state.status);
-
-    // Footer separator (full width)
-    let sep2 = full_sep(chunks[3]);
-    let line2 = Line::from(Span::styled(
-        "─".repeat(sep2.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line2), sep2);
-
-    render_footer(frame, chunks[4]);
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 fn render_header(frame: &mut Frame<'_>, area: Rect) {
@@ -266,13 +247,7 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
     .split(frame.area());
 
     render_header(frame, chunks[0]);
-
-    let sep = full_sep(chunks[1]);
-    let line = Line::from(Span::styled(
-        "─".repeat(sep.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line), sep);
+    render_full_sep(frame, chunks[1]);
 
     let mut lines = state.summary_lines().into_iter().map(Line::from).collect::<Vec<_>>();
     for line in &mut lines {
@@ -283,7 +258,6 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
     }
     frame.render_widget(Paragraph::new(lines), pad(chunks[2]));
 
-    // Warnings
     let warn = state.warnings();
     if !warn.is_empty() {
         let warn_lines: Vec<Line> = warn
@@ -298,12 +272,7 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
         frame.render_widget(Paragraph::new(warn_lines), pad(chunks[3]));
     }
 
-    let sep2 = full_sep(chunks[4]);
-    let line2 = Line::from(Span::styled(
-        "─".repeat(sep2.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line2), sep2);
+    render_full_sep(frame, chunks[4]);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter aplicar  esc voltar",
@@ -338,17 +307,12 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState) {
         Constraint::Min(2),
         Constraint::Length(1),
         Constraint::Length(1),
+        Constraint::Length(1),
     ])
     .split(frame.area());
 
     render_header(frame, chunks[0]);
-
-    let sep = full_sep(chunks[1]);
-    let line = Line::from(Span::styled(
-        "─".repeat(sep.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line), sep);
+    render_full_sep(frame, chunks[1]);
 
     let mut lines = vec![Line::from(Span::styled(
         &state.result_message,
@@ -363,18 +327,13 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState) {
     }
     frame.render_widget(Paragraph::new(lines), pad(chunks[2]));
 
-    let sep2 = full_sep(chunks[3]);
-    let line2 = Line::from(Span::styled(
-        "─".repeat(sep2.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line2), sep2);
+    render_full_sep(frame, chunks[3]);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter voltar  q sair",
         Style::default().fg(DIM),
     )));
-    frame.render_widget(help, chunks[4]);
+    frame.render_widget(help, pad(chunks[4]));
 }
 
 fn centered_rect(percent_x: u16, percent_y: u16, area: Rect) -> Rect {

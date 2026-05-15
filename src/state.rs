@@ -108,7 +108,7 @@ impl AppState {
             password_value: String::new(),
             domain_target: String::from(DOMAIN_TARGET),
             create_user_username: String::new(),
-            status: String::from("Pronto."),
+            status: String::new(),
             blocked_reason,
             result_message: String::new(),
             reboot_required: false,
