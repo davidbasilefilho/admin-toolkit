@@ -131,7 +131,7 @@ impl Field for PasswordField {
         } else {
             // Mask: show bullet per char
             let masked: String = self.value.chars().map(|_| '•').collect();
-            return self.render_masked(area, buf, focused, style, input_x, input_width, masked);
+            self.render_masked(area, buf, focused, style, masked);
         };
     }
 
@@ -230,10 +230,10 @@ impl PasswordField {
         buf: &mut Buffer,
         focused: bool,
         style: &FormStyle,
-        input_x: u16,
-        input_width: u16,
         masked: String,
     ) {
+        let input_x = area.x;
+        let input_width = area.width;
         let input_bg_style = if focused {
             style.input_focused
         } else {

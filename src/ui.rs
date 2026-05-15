@@ -1,54 +1,41 @@
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
-use ratatui::style::{Color, Modifier, Style};
+use ratatui::style::{Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::{Block, BorderType, Paragraph};
 
 use crate::state::{AppState, DOMAIN_TARGET, Focus, InputKind, Screen};
+use crate::theme::Theme;
 use ratatui_form::Form;
-
-// ── Brutalist monochrome palette ──
-
-const FG_MAIN: Color = Color::White;
-const FG_DIM: Color = Color::DarkGray;
-const BORDER_FRAME: Color = Color::White;
-const BORDER_PANEL: Color = Color::DarkGray;
-const SEP: Color = Color::DarkGray;
-const INVERT_BG: Color = Color::White;
-const INVERT_FG: Color = Color::Black;
-const ACCENT: Color = Color::Cyan;
-const GREEN: Color = Color::Green;
-const YELLOW: Color = Color::Yellow;
-const RED: Color = Color::Red;
 
 // ── Block builders ──
 
-fn outer_frame<'a>() -> Block<'a> {
+fn outer_frame<'a>(theme: &Theme) -> Block<'a> {
     Block::bordered()
         .border_type(BorderType::Thick)
-        .border_style(Style::default().fg(BORDER_FRAME))
+        .border_style(Style::default().fg(theme.border_frame))
 }
 
-fn panel<'a>(_title: &'a str) -> Block<'a> {
+fn panel<'a>(_title: &'a str, theme: &Theme) -> Block<'a> {
     Block::bordered()
         .border_type(BorderType::Thick)
-        .border_style(Style::default().fg(BORDER_PANEL))
+        .border_style(Style::default().fg(theme.border_panel))
 }
 
 // ── Separators ──
 
-fn heavy_sep(frame: &mut Frame<'_>, area: Rect) {
+fn heavy_sep(frame: &mut Frame<'_>, area: Rect, theme: &Theme) {
     let p = Paragraph::new(Line::from(Span::styled(
         "━".repeat(area.width.saturating_sub(1) as usize),
-        Style::default().fg(SEP),
+        Style::default().fg(theme.sep),
     )));
     frame.render_widget(p, area);
 }
 
-fn thin_sep(frame: &mut Frame<'_>, area: Rect) {
+fn thin_sep(frame: &mut Frame<'_>, area: Rect, theme: &Theme) {
     let p = Paragraph::new(Line::from(Span::styled(
         "─".repeat(area.width.saturating_sub(1) as usize),
-        Style::default().fg(SEP),
+        Style::default().fg(theme.sep),
     )));
     frame.render_widget(p, area);
 }
@@ -56,21 +43,23 @@ fn thin_sep(frame: &mut Frame<'_>, area: Rect) {
 // ── Public entry ──
 
 pub fn render(frame: &mut Frame<'_>, state: &AppState, form: Option<&Form>) {
+    let theme = Theme::dark_high_contrast();
+
     match state.screen {
-        Screen::Edit => render_edit(frame, state),
-        Screen::Input(kind) => render_input(frame, kind, form),
-        Screen::Confirm => render_confirm(frame, state),
-        Screen::Blocked => render_blocked(frame, state),
-        Screen::Result => render_result(frame, state),
+        Screen::Edit => render_edit(frame, state, &theme),
+        Screen::Input(kind) => render_input(frame, kind, form, &theme),
+        Screen::Confirm => render_confirm(frame, state, &theme),
+        Screen::Blocked => render_blocked(frame, state, &theme),
+        Screen::Result => render_result(frame, state, &theme),
     }
 }
 
 // ── Edit screen ──
 
-fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
+fn render_edit(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame();
+    let outer = outer_frame(theme);
     frame.render_widget(&outer, area);
     let inner = outer.inner(area);
 
@@ -80,11 +69,11 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     let sys_panel_height = sys_content_height + 2;
 
     let mut constraints: Vec<Constraint> = vec![
-        Constraint::Length(1),                        // 0: title
-        Constraint::Length(1),                        // 1: subtitle
-        Constraint::Length(sys_panel_height as u16),  // 2: sys panel
-        Constraint::Length(1),                        // 3: spacing
-        Constraint::Min(3),                           // 4: actions panel
+        Constraint::Length(1),                       // 0: title
+        Constraint::Length(1),                       // 1: subtitle
+        Constraint::Length(sys_panel_height as u16), // 2: sys panel
+        Constraint::Length(1),                       // 3: spacing
+        Constraint::Min(3),                          // 4: actions panel
     ];
 
     if has_status {
@@ -103,9 +92,11 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     let title = Paragraph::new(Line::from(vec![
         Span::styled(
             "admin-toolkit",
-            Style::default().fg(FG_MAIN).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.fg_main)
+                .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("v1.4.0", Style::default().fg(FG_DIM)),
+        Span::styled("v1.4.0", Style::default().fg(theme.fg_dim)),
     ]))
     .alignment(Alignment::Center);
     frame.render_widget(title, chunks[0]);
@@ -113,39 +104,39 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     // Subtitle
     let subtitle = Paragraph::new(Line::from(Span::styled(
         "alterações em lote do sistema",
-        Style::default().fg(FG_DIM),
+        Style::default().fg(theme.fg_dim),
     )));
     frame.render_widget(subtitle, chunks[1]);
 
     // System info panel
-    let sys_panel = panel("Sistema");
+    let sys_panel = panel("Sistema", theme);
     frame.render_widget(&sys_panel, chunks[2]);
     let sys_inner = sys_panel.inner(chunks[2]);
-    render_system_content(frame, sys_inner, state);
+    render_system_content(frame, sys_inner, state, theme);
 
     // Actions panel
-    let act_panel = panel("Ações");
+    let act_panel = panel("Ações", theme);
     frame.render_widget(&act_panel, chunks[4]);
     let act_inner = act_panel.inner(chunks[4]);
-    render_actions_content(frame, act_inner, state);
+    render_actions_content(frame, act_inner, state, theme);
 
     // Status row
     if has_status {
         let status_sep = sep_idx - 2;
         let status_area = sep_idx - 1;
-        thin_sep(frame, chunks[status_sep]);
+        thin_sep(frame, chunks[status_sep], theme);
         let status_line = Paragraph::new(Line::from(Span::styled(
             &state.status,
-            Style::default().fg(YELLOW),
+            Style::default().fg(theme.status_warning),
         )));
         frame.render_widget(status_line, chunks[status_area]);
     }
 
-    heavy_sep(frame, chunks[sep_idx]);
+    heavy_sep(frame, chunks[sep_idx], theme);
 
     let footer = Paragraph::new(Line::from(Span::styled(
         "↑↓ navegar  espaço alternar  e editar  enter confirmar  esc voltar  q sair",
-        Style::default().fg(FG_DIM),
+        Style::default().fg(theme.fg_dim),
     )));
     frame.render_widget(footer, chunks[footer_idx]);
 }
@@ -161,18 +152,22 @@ fn sys_extra_lines(state: &AppState) -> usize {
     extra
 }
 
-fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
+fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, theme: &Theme) {
     let w_col = 12usize;
 
     let mut lines = vec![
         Line::from(vec![
             Span::styled(
                 format!("{:<w_col$}", "Atual", w_col = w_col),
-                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
             ),
             Span::styled(
                 "Destino",
-                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+                Style::default()
+                    .fg(theme.accent)
+                    .add_modifier(Modifier::BOLD),
             ),
         ]),
         Line::from(""),
@@ -181,32 +176,36 @@ fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     lines.push(Line::from(vec![
         Span::styled(
             format!("{:<w_col$}", "hostname", w_col = w_col),
-            Style::default().fg(FG_DIM),
+            Style::default().fg(theme.fg_dim),
         ),
-        Span::styled(&state.snapshot.hostname, Style::default().fg(FG_MAIN)),
+        Span::styled(&state.snapshot.hostname, Style::default().fg(theme.fg_main)),
     ]));
 
     lines.push(Line::from(vec![
         Span::styled(
             format!("{:<w_col$}", "domínio", w_col = w_col),
-            Style::default().fg(FG_DIM),
+            Style::default().fg(theme.fg_dim),
         ),
-        Span::styled(&state.snapshot.domain, Style::default().fg(FG_MAIN)),
+        Span::styled(&state.snapshot.domain, Style::default().fg(theme.fg_main)),
         Span::raw("  "),
-        Span::styled(DOMAIN_TARGET, Style::default().fg(ACCENT)),
+        Span::styled(DOMAIN_TARGET, Style::default().fg(theme.accent)),
     ]));
 
     lines.push(Line::from(vec![
         Span::styled(
             format!("{:<w_col$}", "admin", w_col = w_col),
-            Style::default().fg(FG_DIM),
+            Style::default().fg(theme.fg_dim),
         ),
         Span::styled(
-            if state.snapshot.elevated { "Sim" } else { "Não" },
             if state.snapshot.elevated {
-                Style::default().fg(GREEN)
+                "Sim"
             } else {
-                Style::default().fg(RED)
+                "Não"
+            },
+            if state.snapshot.elevated {
+                Style::default().fg(theme.status_success)
+            } else {
+                Style::default().fg(theme.status_error)
             },
         ),
     ]));
@@ -215,20 +214,20 @@ fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
         lines.push(Line::from(vec![
             Span::styled(
                 format!("{:<w_col$}", "novo hostname", w_col = w_col),
-                Style::default().fg(FG_DIM),
+                Style::default().fg(theme.fg_dim),
             ),
-            Span::styled(&state.hostname_target, Style::default().fg(FG_MAIN)),
+            Span::styled(&state.hostname_target, Style::default().fg(theme.fg_main)),
         ]));
     }
     if state.create_user_enabled && !state.create_user_username.is_empty() {
         lines.push(Line::from(vec![
             Span::styled(
                 format!("{:<w_col$}", "novo usuário", w_col = w_col),
-                Style::default().fg(FG_DIM),
+                Style::default().fg(theme.fg_dim),
             ),
             Span::styled(
                 &state.create_user_username,
-                Style::default().fg(FG_MAIN),
+                Style::default().fg(theme.fg_main),
             ),
         ]));
     }
@@ -236,7 +235,7 @@ fn render_system_content(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     frame.render_widget(Paragraph::new(lines), area);
 }
 
-fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
+fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, theme: &Theme) {
     let mut lines = Vec::new();
 
     let rows = [
@@ -277,20 +276,20 @@ fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     for (label, enabled, focused, note) in &rows {
         let marker = if *enabled { "[x]" } else { "[ ]" };
         let marker_style = if *enabled {
-            Style::default().fg(GREEN)
+            Style::default().fg(theme.status_success)
         } else {
-            Style::default().fg(FG_DIM)
+            Style::default().fg(theme.fg_dim)
         };
 
         let base_style = if *focused {
             Style::default()
-                .fg(INVERT_FG)
-                .bg(INVERT_BG)
+                .fg(theme.invert_fg)
+                .bg(theme.invert_bg)
                 .add_modifier(Modifier::BOLD)
         } else if *enabled {
-            Style::default().fg(FG_MAIN)
+            Style::default().fg(theme.fg_main)
         } else {
-            Style::default().fg(FG_DIM)
+            Style::default().fg(theme.fg_dim)
         };
 
         let mut spans = vec![
@@ -302,7 +301,7 @@ fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
         if *enabled && !note.is_empty() {
             spans.push(Span::styled(
                 format!("  [{}]", note),
-                Style::default().fg(FG_DIM),
+                Style::default().fg(theme.fg_dim),
             ));
         }
 
@@ -314,10 +313,10 @@ fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
 
 // ── Input overlay ──
 
-fn render_input(frame: &mut Frame<'_>, _kind: InputKind, form: Option<&Form>) {
+fn render_input(frame: &mut Frame<'_>, _kind: InputKind, form: Option<&Form>, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame();
+    let outer = outer_frame(theme);
     frame.render_widget(&outer, area);
     let inner = outer.inner(area);
 
@@ -330,7 +329,7 @@ fn render_input(frame: &mut Frame<'_>, _kind: InputKind, form: Option<&Form>) {
 
     let help = Paragraph::new(Line::from(Span::styled(
         "esc cancelar  enter confirmar",
-        Style::default().fg(FG_DIM),
+        Style::default().fg(theme.fg_dim),
     )))
     .alignment(Alignment::Center);
     frame.render_widget(help, chunks[1]);
@@ -338,21 +337,21 @@ fn render_input(frame: &mut Frame<'_>, _kind: InputKind, form: Option<&Form>) {
 
 // ── Confirm screen ──
 
-fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
+fn render_confirm(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame();
+    let outer = outer_frame(theme);
     frame.render_widget(&outer, area);
     let inner = outer.inner(area);
 
     let chunks = Layout::vertical([
-        Constraint::Length(1),  // title
-        Constraint::Length(1),  // subtitle
-        Constraint::Min(2),     // summary
-        Constraint::Length(1),  // sep
-        Constraint::Length(2),  // warnings
-        Constraint::Length(1),  // footer sep
-        Constraint::Length(1),  // footer
+        Constraint::Length(1), // title
+        Constraint::Length(1), // subtitle
+        Constraint::Min(2),    // summary
+        Constraint::Length(1), // sep
+        Constraint::Length(2), // warnings
+        Constraint::Length(1), // footer sep
+        Constraint::Length(1), // footer
     ])
     .split(inner);
 
@@ -360,9 +359,11 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
     let title = Paragraph::new(Line::from(vec![
         Span::styled(
             "admin-toolkit",
-            Style::default().fg(FG_MAIN).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.fg_main)
+                .add_modifier(Modifier::BOLD),
         ),
-        Span::styled("v1.4.0", Style::default().fg(FG_DIM)),
+        Span::styled("v1.4.0", Style::default().fg(theme.fg_dim)),
     ]))
     .alignment(Alignment::Center);
     frame.render_widget(title, chunks[0]);
@@ -370,11 +371,15 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
     // Subtitle
     let subtitle = Paragraph::new(Line::from(Span::styled(
         "alterações em lote do sistema",
-        Style::default().fg(FG_DIM),
+        Style::default().fg(theme.fg_dim),
     )));
     frame.render_widget(subtitle, chunks[1]);
 
-    let mut lines = state.summary_lines().into_iter().map(Line::from).collect::<Vec<_>>();
+    let mut lines = state
+        .summary_lines()
+        .into_iter()
+        .map(Line::from)
+        .collect::<Vec<_>>();
     for line in &mut lines {
         let spans = line.spans.clone();
         if !spans.is_empty() {
@@ -390,43 +395,45 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
             .map(|w| {
                 Line::from(Span::styled(
                     format!("  ⚠ {}", w),
-                    Style::default().fg(YELLOW),
+                    Style::default().fg(theme.status_warning),
                 ))
             })
             .collect();
         frame.render_widget(Paragraph::new(warn_lines), chunks[4]);
     }
 
-    heavy_sep(frame, chunks[4]);
+    heavy_sep(frame, chunks[4], theme);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter aplicar  esc voltar",
-        Style::default().fg(FG_DIM),
+        Style::default().fg(theme.fg_dim),
     )));
     frame.render_widget(help, chunks[6]);
 }
 
 // ── Blocked screen ──
 
-fn render_blocked(frame: &mut Frame<'_>, state: &AppState) {
+fn render_blocked(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame();
+    let outer = outer_frame(theme);
     frame.render_widget(&outer, area);
     let inner = outer.inner(area);
 
     let lines = vec![
         Line::from(Span::styled(
             "Privilégios de administrador necessários",
-            Style::default().fg(RED).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.status_error)
+                .add_modifier(Modifier::BOLD),
         )),
         Line::from(""),
         Line::from(Span::styled(
             &state.blocked_reason,
-            Style::default().fg(FG_MAIN),
+            Style::default().fg(theme.fg_main),
         )),
         Line::from(""),
-        Line::from(Span::styled("q sair", Style::default().fg(FG_DIM))),
+        Line::from(Span::styled("q sair", Style::default().fg(theme.fg_dim))),
     ];
 
     let p = Paragraph::new(lines).alignment(Alignment::Center);
@@ -435,10 +442,10 @@ fn render_blocked(frame: &mut Frame<'_>, state: &AppState) {
 
 // ── Result screen ──
 
-fn render_result(frame: &mut Frame<'_>, state: &AppState) {
+fn render_result(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame();
+    let outer = outer_frame(theme);
     frame.render_widget(&outer, area);
     let inner = outer.inner(area);
 
@@ -451,22 +458,24 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState) {
 
     let mut lines = vec![Line::from(Span::styled(
         &state.result_message,
-        Style::default().fg(FG_MAIN),
+        Style::default().fg(theme.fg_main),
     ))];
     if state.reboot_required {
         lines.push(Line::from(""));
         lines.push(Line::from(Span::styled(
             "⚠ Reinicialização necessária.",
-            Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
+            Style::default()
+                .fg(theme.status_warning)
+                .add_modifier(Modifier::BOLD),
         )));
     }
     frame.render_widget(Paragraph::new(lines), chunks[0]);
 
-    heavy_sep(frame, chunks[1]);
+    heavy_sep(frame, chunks[1], theme);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter voltar  q sair",
-        Style::default().fg(FG_DIM),
+        Style::default().fg(theme.fg_dim),
     )));
     frame.render_widget(help, chunks[2]);
 }

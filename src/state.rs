@@ -117,7 +117,10 @@ impl AppState {
     }
 
     pub fn any_selected(&self) -> bool {
-        self.hostname_enabled || self.password_enabled || self.domain_enabled || self.create_user_enabled
+        self.hostname_enabled
+            || self.password_enabled
+            || self.domain_enabled
+            || self.create_user_enabled
     }
 
     pub fn can_confirm(&self) -> bool {
@@ -183,7 +186,9 @@ impl AppState {
             hostname: self.hostname_enabled.then(|| self.hostname_target.clone()),
             password: self.password_enabled.then(|| self.password_value.clone()),
             domain: self.domain_enabled.then(|| self.domain_target.clone()),
-            create_user: self.create_user_enabled.then(|| self.create_user_username.clone()),
+            create_user: self
+                .create_user_enabled
+                .then(|| self.create_user_username.clone()),
         })
     }
 
@@ -297,7 +302,11 @@ mod tests {
     use super::*;
 
     fn snapshot() -> SystemSnapshot {
-        SystemSnapshot { hostname: String::from("PC-01"), domain: String::from("WORKGROUP"), elevated: true }
+        SystemSnapshot {
+            hostname: String::from("PC-01"),
+            domain: String::from("WORKGROUP"),
+            elevated: true,
+        }
     }
 
     #[test]

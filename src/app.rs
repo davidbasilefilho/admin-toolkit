@@ -2,9 +2,9 @@ use std::io;
 use std::time::Duration;
 
 use crossterm::ExecutableCommand;
-use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 #[cfg(test)]
 use crossterm::event::KeyModifiers;
+use crossterm::event::{self, Event, KeyCode, KeyEvent, KeyEventKind};
 use crossterm::terminal::{
     EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode,
 };
@@ -45,10 +45,17 @@ struct App<Ops: WindowsOps> {
 
 impl<Ops: WindowsOps> App<Ops> {
     fn new(snapshot: crate::state::SystemSnapshot, ops: Ops) -> Self {
-        Self { state: AppState::new(snapshot), form: None, ops }
+        Self {
+            state: AppState::new(snapshot),
+            form: None,
+            ops,
+        }
     }
 
-    fn run(&mut self, terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>) -> io::Result<()> {
+    fn run(
+        &mut self,
+        terminal: &mut Terminal<CrosstermBackend<std::io::Stdout>>,
+    ) -> io::Result<()> {
         loop {
             terminal.draw(|frame| ui::render(frame, &self.state, self.form.as_ref()))?;
             if event::poll(POLL_INTERVAL)? {
@@ -106,9 +113,8 @@ impl<Ops: WindowsOps> App<Ops> {
                 if enabled {
                     self.begin_edit();
                 } else {
-                    self.state.status = String::from(
-                        "Selecione a ação com espaço antes de editar.",
-                    );
+                    self.state.status =
+                        String::from("Selecione a ação com espaço antes de editar.");
                 }
                 Ok(false)
             }
@@ -116,16 +122,22 @@ impl<Ops: WindowsOps> App<Ops> {
                 if self.state.can_confirm() {
                     self.state.screen = Screen::Confirm;
                     self.state.status = String::from("Revise as alterações em estágio.");
-                } else if matches!(self.state.focus, Focus::Hostname) && self.state.hostname_enabled {
-                    self.begin_edit();
-                } else if matches!(self.state.focus, Focus::Password) && self.state.password_enabled {
-                    self.begin_edit();
-                } else if matches!(self.state.focus, Focus::Domain) && self.state.domain_enabled {
-                    self.begin_edit();
-                } else if matches!(self.state.focus, Focus::CreateUser) && self.state.create_user_enabled {
-                    self.begin_edit();
                 } else {
-                    self.state.status = String::from("Ative as ações e preencha os campos obrigatórios primeiro.");
+                    let should_edit = matches!(self.state.focus, Focus::Hostname)
+                        && self.state.hostname_enabled
+                        || matches!(self.state.focus, Focus::Password)
+                            && self.state.password_enabled
+                        || matches!(self.state.focus, Focus::Domain) && self.state.domain_enabled
+                        || matches!(self.state.focus, Focus::CreateUser)
+                            && self.state.create_user_enabled;
+
+                    if should_edit {
+                        self.begin_edit();
+                    } else {
+                        self.state.status = String::from(
+                            "Ative as ações e preencha os campos obrigatórios primeiro.",
+                        );
+                    }
                 }
                 Ok(false)
             }
@@ -204,7 +216,10 @@ impl<Ops: WindowsOps> App<Ops> {
             return Ok(false);
         };
 
-        let ApplyOutcome { reboot_required, message } = self.ops.apply(&plan)?;
+        let ApplyOutcome {
+            reboot_required,
+            message,
+        } = self.ops.apply(&plan)?;
         self.state.reboot_required = reboot_required;
         self.state.result_message = message;
         self.state.screen = Screen::Result;
@@ -219,47 +234,72 @@ mod tests {
     use std::cell::Cell;
 
     #[derive(Default)]
-    struct FakeWindowsOps { applied: Cell<usize> }
+    struct FakeWindowsOps {
+        applied: Cell<usize>,
+    }
 
     impl WindowsOps for FakeWindowsOps {
         fn snapshot(&self) -> io::Result<crate::state::SystemSnapshot> {
-            Ok(crate::state::SystemSnapshot { hostname: String::from("PC-01"), domain: String::from("WORKGROUP"), elevated: true })
+            Ok(crate::state::SystemSnapshot {
+                hostname: String::from("PC-01"),
+                domain: String::from("WORKGROUP"),
+                elevated: true,
+            })
         }
         fn apply(&self, plan: &crate::state::ApplyPlan) -> io::Result<ApplyOutcome> {
             self.applied.set(self.applied.get() + 1);
-            Ok(ApplyOutcome { reboot_required: plan.hostname.is_some() || plan.domain.is_some(), message: String::from("Aplicado com sucesso.") })
+            Ok(ApplyOutcome {
+                reboot_required: plan.hostname.is_some() || plan.domain.is_some(),
+                message: String::from("Aplicado com sucesso."),
+            })
         }
     }
 
     fn app() -> App<FakeWindowsOps> {
-        App::new(crate::state::SystemSnapshot { hostname: String::from("PC-01"), domain: String::from("WORKGROUP"), elevated: true }, FakeWindowsOps::default())
+        App::new(
+            crate::state::SystemSnapshot {
+                hostname: String::from("PC-01"),
+                domain: String::from("WORKGROUP"),
+                elevated: true,
+            },
+            FakeWindowsOps::default(),
+        )
     }
 
     #[test]
     fn q_quits_from_edit() {
         let mut a = app();
-        assert!(a.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::empty())).unwrap());
+        assert!(
+            a.handle_key(KeyEvent::new(KeyCode::Char('q'), KeyModifiers::empty()))
+                .unwrap()
+        );
     }
 
     #[test]
     fn esc_quits_from_edit() {
         let mut a = app();
-        assert!(a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::empty())).unwrap());
+        assert!(
+            a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()))
+                .unwrap()
+        );
     }
 
     #[test]
     fn tab_and_backtab_cycle_focus() {
         let mut a = app();
-        a.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::empty())).unwrap();
+        a.handle_key(KeyEvent::new(KeyCode::Tab, KeyModifiers::empty()))
+            .unwrap();
         assert!(matches!(a.state.focus, Focus::Password));
-        a.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::empty())).unwrap();
+        a.handle_key(KeyEvent::new(KeyCode::BackTab, KeyModifiers::empty()))
+            .unwrap();
         assert!(matches!(a.state.focus, Focus::Hostname));
     }
 
     #[test]
     fn space_toggles_focused_action() {
         let mut a = app();
-        a.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::empty())).unwrap();
+        a.handle_key(KeyEvent::new(KeyCode::Char(' '), KeyModifiers::empty()))
+            .unwrap();
         assert!(a.state.hostname_enabled);
     }
 
@@ -267,7 +307,8 @@ mod tests {
     fn e_opens_input_form() {
         let mut a = app();
         a.state.hostname_enabled = true;
-        a.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::empty())).unwrap();
+        a.handle_key(KeyEvent::new(KeyCode::Char('e'), KeyModifiers::empty()))
+            .unwrap();
         assert!(matches!(a.state.screen, Screen::Input(InputKind::Hostname)));
         assert!(a.form.is_some());
     }
@@ -278,7 +319,8 @@ mod tests {
         a.state.hostname_enabled = true;
         a.state.screen = Screen::Input(InputKind::Hostname);
         a.form = Some(a.state.build_input_form(InputKind::Hostname));
-        a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::empty())).unwrap();
+        a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()))
+            .unwrap();
         assert!(matches!(a.state.screen, Screen::Edit));
         assert!(a.form.is_none());
     }
@@ -289,10 +331,12 @@ mod tests {
         a.state.hostname_enabled = true;
         a.state.hostname_target = String::from("PC-02");
         a.state.screen = Screen::Confirm;
-        a.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty())).unwrap();
+        a.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
+            .unwrap();
         assert!(matches!(a.state.screen, Screen::Result));
         assert_eq!(a.ops.applied.get(), 1);
-        a.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty())).unwrap();
+        a.handle_key(KeyEvent::new(KeyCode::Enter, KeyModifiers::empty()))
+            .unwrap();
         assert!(matches!(a.state.screen, Screen::Edit));
     }
 
@@ -300,7 +344,8 @@ mod tests {
     fn confirm_esc_returns_to_edit() {
         let mut a = app();
         a.state.screen = Screen::Confirm;
-        a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::empty())).unwrap();
+        a.handle_key(KeyEvent::new(KeyCode::Esc, KeyModifiers::empty()))
+            .unwrap();
         assert!(matches!(a.state.screen, Screen::Edit));
     }
 }
