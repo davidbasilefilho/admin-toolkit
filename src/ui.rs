@@ -10,10 +10,10 @@ use ratatui_form::Form;
 
 // ── Block builders ──
 
-fn outer_frame<'a>(theme: &Theme) -> Block<'a> {
+fn outer_frame<'a>(_theme: &Theme) -> Block<'a> {
     Block::bordered()
-        .border_type(BorderType::Thick)
-        .border_style(Style::default().fg(theme.border_frame))
+        .border_type(BorderType::Plain)
+        .border_style(Style::default())
 }
 
 fn panel<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
@@ -350,6 +350,13 @@ fn render_input(frame: &mut Frame<'_>, _kind: InputKind, form: Option<&Form>, th
     let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(inner);
     let form_area = centered_rect(70, 20, chunks[0]);
 
+    // Fill form background
+    frame.render_widget(
+        Paragraph::new("")
+            .style(Style::default().bg(theme.bg)),
+        form_area,
+    );
+
     if let Some(form) = form {
         form.render(form_area, frame.buffer_mut());
     }
@@ -394,6 +401,13 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let outer = outer_frame(theme);
     frame.render_widget(&outer, area);
     let inner = outer.inner(area);
+
+    // Fill confirm screen background
+    frame.render_widget(
+        Paragraph::new("")
+            .style(Style::default().bg(theme.bg)),
+        inner,
+    );
 
     let chunks = Layout::vertical([
         Constraint::Length(1), // title
@@ -467,6 +481,13 @@ fn render_blocked(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     frame.render_widget(&outer, area);
     let inner = outer.inner(area);
 
+    // Fill blocked screen background
+    frame.render_widget(
+        Paragraph::new("")
+            .style(Style::default().bg(theme.bg)),
+        inner,
+    );
+
     let lines = vec![
         Line::from(Span::styled(
             "Privilégios de administrador necessários",
@@ -495,6 +516,13 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let outer = outer_frame(theme);
     frame.render_widget(&outer, area);
     let inner = outer.inner(area);
+
+    // Fill result screen background
+    frame.render_widget(
+        Paragraph::new("")
+            .style(Style::default().bg(theme.bg)),
+        inner,
+    );
 
     let chunks = Layout::vertical([
         Constraint::Min(2),

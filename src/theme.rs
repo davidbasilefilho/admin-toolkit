@@ -27,6 +27,7 @@ pub struct Theme {
     pub bg: Color,
 
     /// Outer frame border color (thick border around entire screen).
+    #[allow(dead_code)]
     pub border_frame: Color,
 
     /// Panel border color (thick borders around content panels).
