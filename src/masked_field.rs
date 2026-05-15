@@ -267,6 +267,7 @@ impl PasswordField {
                         .fg(Color::Black)
                         .add_modifier(Modifier::SLOW_BLINK),
                 );
+                buf[(cursor_x, area.y)].set_char('▌');
             }
         }
     }

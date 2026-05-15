@@ -1,4 +1,6 @@
+use ratatui::style::{Color, Modifier, Style};
 use ratatui_form::Form;
+use ratatui_form::style::FormStyle;
 use serde_json::Value;
 
 use crate::masked_field::PasswordField;
@@ -253,7 +255,17 @@ impl AppState {
             InputKind::CreateUser => "Criar usuário",
         };
 
-        let mut builder = Form::builder().title(title);
+        let form_style = FormStyle::new()
+            .title(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+            .label(Style::default().fg(Color::DarkGray))
+            .label_focused(Style::default().fg(Color::White).add_modifier(Modifier::BOLD))
+            .input(Style::default().fg(Color::White).bg(Color::Reset))
+            .input_focused(Style::default().fg(Color::White).bg(Color::DarkGray))
+            .placeholder(Style::default().fg(Color::DarkGray))
+            .button(Style::default().fg(Color::White).bg(Color::DarkGray))
+            .button_focused(Style::default().fg(Color::Black).bg(Color::White).add_modifier(Modifier::BOLD));
+
+        let mut builder = Form::builder().title(title).style(form_style);
 
         if matches!(kind, InputKind::Password) {
             let field = PasswordField::new(id, label)
