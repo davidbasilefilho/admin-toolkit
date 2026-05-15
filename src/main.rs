@@ -1,4 +1,5 @@
 mod app;
+mod masked_field;
 mod state;
 mod ui;
 mod windows_ops;
