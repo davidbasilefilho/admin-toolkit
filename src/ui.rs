@@ -23,11 +23,19 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState, form: Option<&Form>) {
     }
 }
 
-// ── Layout ──
+// ── Layout helpers ──
 
 fn pad(area: Rect) -> Rect {
     Layout::horizontal([Constraint::Length(2), Constraint::Min(1), Constraint::Length(2)])
         .split(area)[1]
+}
+
+fn render_full_sep(frame: &mut Frame<'_>, area: Rect) {
+    let line = Line::from(Span::styled(
+        "─".repeat(area.width as usize),
+        Style::default().fg(DIM),
+    ));
+    frame.render_widget(Paragraph::new(line), area);
 }
 
 // ── Edit screen ──
@@ -36,11 +44,10 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     let area = frame.area();
     let has_status = !state.status.is_empty();
 
-    // Outer layout: header | sep | body | footer_sep | footer | spacing
     let outer = Layout::vertical([
         Constraint::Length(1),   // header
         Constraint::Length(1),   // separator
-        Constraint::Min(6),      // body (may include status section)
+        Constraint::Min(6),      // body
         Constraint::Length(1),   // footer separator
         Constraint::Length(1),   // footer
         Constraint::Length(1),   // bottom spacing
@@ -51,8 +58,6 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     render_full_sep(frame, outer[1]);
 
     let body = outer[2];
-
-    // Body layout: system | sep | actions [+ sep + status]
     let mut body_parts = vec![
         Constraint::Length(4),   // system
         Constraint::Length(1),   // separator
@@ -77,101 +82,93 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     render_footer(frame, pad(outer[4]));
 }
 
-fn render_full_sep(frame: &mut Frame<'_>, area: Rect) {
-    let line = Line::from(Span::styled(
-        "─".repeat(area.width as usize),
-        Style::default().fg(DIM),
-    ));
-    frame.render_widget(Paragraph::new(line), area);
-}
-
 fn render_header(frame: &mut Frame<'_>, area: Rect) {
-    let h = Line::from(vec![
-        Span::styled("admin-toolkit", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
-        Span::raw("  "),
-        Span::styled("stage system changes", Style::default().fg(DIM)),
-        Span::raw("  "),
-        Span::styled("v1.3.4", Style::default().fg(DIM)),
-    ]);
-    frame.render_widget(Paragraph::new(h), area);
+    let h = Line::from(Span::styled(
+        "  admin-toolkit  alterações em lote do sistema",
+        Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
+    ));
+    frame.render_widget(Paragraph::new(h), pad(area));
 }
 
 fn render_system(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    let cols = Layout::horizontal([
-        Constraint::Percentage(50),
-        Constraint::Percentage(50),
-    ])
-    .split(area);
+    let w_col = 12usize;
 
-    let w = 10usize;
-
-    // Atual
-    let left = vec![
-        Line::from(Span::styled(
-            "Atual",
-            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-        )),
-        Line::from(""),
+    // Build rows: each line has left value + optional right value
+    let mut lines = vec![
         Line::from(vec![
-            Span::styled(format!("{:<w$}", "hostname", w = w), Style::default().fg(DIM)),
-            Span::styled(&state.snapshot.hostname, Style::default().fg(WHITE)),
-        ]),
-        Line::from(vec![
-            Span::styled(format!("{:<w$}", "domínio", w = w), Style::default().fg(DIM)),
-            Span::styled(&state.snapshot.domain, Style::default().fg(WHITE)),
-        ]),
-        Line::from(vec![
-            Span::styled(format!("{:<w$}", "admin", w = w), Style::default().fg(DIM)),
             Span::styled(
-                if state.snapshot.elevated { "Sim" } else { "Não" },
-                if state.snapshot.elevated {
-                    Style::default().fg(GREEN)
-                } else {
-                    Style::default().fg(Color::Red)
-                },
+                format!("{:<w_col$}", "Atual", w_col = w_col),
+                Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
             ),
+            Span::styled("Destino", Style::default().fg(ACCENT).add_modifier(Modifier::BOLD)),
         ]),
-    ];
-    frame.render_widget(Paragraph::new(left), cols[0]);
-
-    // Destino
-    let mut right = vec![
-        Line::from(Span::styled(
-            "Destino",
-            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-        )),
         Line::from(""),
-        Line::from(vec![
-            Span::styled(format!("{:<w$}", "domínio", w = w), Style::default().fg(DIM)),
-            Span::styled(DOMAIN_TARGET, Style::default().fg(ACCENT)),
-        ]),
     ];
 
+    // Row: hostname
+    lines.push(Line::from(vec![
+        Span::styled(format!("{:<w_col$}", "hostname", w_col = w_col), Style::default().fg(DIM)),
+        Span::styled(&state.snapshot.hostname, Style::default().fg(WHITE)),
+    ]));
+
+    // Row: domínio (always shows current + target)
+    let row = vec![
+        Span::styled(format!("{:<w_col$}", "domínio", w_col = w_col), Style::default().fg(DIM)),
+        Span::styled(&state.snapshot.domain, Style::default().fg(WHITE)),
+        Span::raw("  "),
+        Span::styled(DOMAIN_TARGET, Style::default().fg(ACCENT)),
+    ];
+    lines.push(Line::from(row));
+
+    // Row: admin
+    let row = vec![
+        Span::styled(format!("{:<w_col$}", "admin", w_col = w_col), Style::default().fg(DIM)),
+        Span::styled(
+            if state.snapshot.elevated { "Sim" } else { "Não" },
+            if state.snapshot.elevated {
+                Style::default().fg(GREEN)
+            } else {
+                Style::default().fg(Color::Red)
+            },
+        ),
+    ];
+    lines.push(Line::from(row));
+
+    // Row: hostname target (only if staged)
     if state.hostname_enabled && !state.hostname_target.is_empty() {
-        right.push(Line::from(vec![
-            Span::styled(format!("{:<w$}", "hostname", w = w), Style::default().fg(DIM)),
+        let row = vec![
+            Span::styled(format!("{:<w_col$}", "novo hostname", w_col = w_col), Style::default().fg(DIM)),
             Span::styled(&state.hostname_target, Style::default().fg(WHITE)),
-        ]));
-    }
-    if state.create_user_enabled && !state.create_user_username.is_empty() {
-        right.push(Line::from(vec![
-            Span::styled(format!("{:<w$}", "usuário", w = w), Style::default().fg(DIM)),
-            Span::styled(&state.create_user_username, Style::default().fg(WHITE)),
-        ]));
+        ];
+        lines.push(Line::from(row));
     }
 
-    frame.render_widget(Paragraph::new(right), cols[1]);
+    // Row: create user (only if staged)
+    if state.create_user_enabled && !state.create_user_username.is_empty() {
+        let row = vec![
+            Span::styled(format!("{:<w_col$}", "novo usuário", w_col = w_col), Style::default().fg(DIM)),
+            Span::styled(&state.create_user_username, Style::default().fg(WHITE)),
+        ];
+        lines.push(Line::from(row));
+    }
+
+    frame.render_widget(Paragraph::new(lines), area);
 }
 
 fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
+    let mut lines = Vec::new();
+
+    lines.push(Line::from(Span::styled(
+        "AÇÕES",
+        Style::default().fg(DIM).add_modifier(Modifier::BOLD),
+    )));
+
     let rows = [
         ("Alterar nome do computador", state.hostname_enabled, matches!(state.focus, Focus::Hostname), state.hostname_target.as_str()),
         ("Alterar senha da Prefeitura", state.password_enabled, matches!(state.focus, Focus::Password), if state.password_value.is_empty() { "precisa de senha" } else { "senha definida" }),
         ("Alterar domínio para itu.local", state.domain_enabled, matches!(state.focus, Focus::Domain), state.domain_target.as_str()),
         ("Criar usuário", state.create_user_enabled, matches!(state.focus, Focus::CreateUser), if state.create_user_username.is_empty() { "precisa de nome" } else { state.create_user_username.as_str() }),
     ];
-
-    let mut lines = Vec::new();
 
     for (label, enabled, focused, note) in &rows {
         let marker = if *enabled { "[x]" } else { "[ ]" };
@@ -219,7 +216,7 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect) {
 // ── Input overlay ──
 
 fn render_input(frame: &mut Frame<'_>, _state: &AppState, _kind: InputKind, form: Option<&Form>) {
-    let area = centered_rect(70, 30, frame.area());
+    let area = centered_rect(70, 20, frame.area());
 
     let backdrop = Paragraph::new(Line::from(Span::styled(
         "esc cancelar  enter confirmar",
