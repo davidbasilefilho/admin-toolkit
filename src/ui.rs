@@ -10,12 +10,6 @@ use ratatui_form::Form;
 
 // ── Block builders ──
 
-fn outer_frame<'a>(_theme: &Theme) -> Block<'a> {
-    Block::bordered()
-        .border_type(BorderType::Plain)
-        .border_style(Style::default())
-}
-
 fn panel<'a>(title: &'a str, theme: &Theme) -> Block<'a> {
     Block::bordered()
         .border_type(BorderType::Thick)
@@ -66,9 +60,8 @@ pub fn render(frame: &mut Frame<'_>, state: &AppState, form: Option<&Form>) {
 fn render_edit(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame(theme);
-    frame.render_widget(&outer, area);
-    let inner = outer.inner(area);
+    frame.render_widget(Paragraph::new("").style(Style::default().bg(theme.bg)), area);
+    let inner = area;
 
     let has_status = !state.status.is_empty();
     let sys_extra = sys_extra_lines(state);
@@ -343,19 +336,10 @@ fn render_actions_content(frame: &mut Frame<'_>, area: Rect, state: &AppState, t
 fn render_input(frame: &mut Frame<'_>, _kind: InputKind, form: Option<&Form>, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame(theme);
-    frame.render_widget(&outer, area);
-    let inner = outer.inner(area);
-
-    let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(inner);
+    let chunks = Layout::vertical([Constraint::Min(1), Constraint::Length(1)]).split(area);
     let form_area = centered_rect(70, 20, chunks[0]);
 
-    // Fill form background
-    frame.render_widget(
-        Paragraph::new("")
-            .style(Style::default().bg(theme.bg)),
-        form_area,
-    );
+    frame.render_widget(Paragraph::new("").style(Style::default().bg(theme.bg)), area);
 
     if let Some(form) = form {
         form.render(form_area, frame.buffer_mut());
@@ -398,16 +382,8 @@ fn styled_summary_line(line: &str, theme: &Theme) -> Line<'static> {
 fn render_confirm(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame(theme);
-    frame.render_widget(&outer, area);
-    let inner = outer.inner(area);
-
-    // Fill confirm screen background
-    frame.render_widget(
-        Paragraph::new("")
-            .style(Style::default().bg(theme.bg)),
-        inner,
-    );
+    frame.render_widget(Paragraph::new("").style(Style::default().bg(theme.bg)), area);
+    let inner = area;
 
     let chunks = Layout::vertical([
         Constraint::Length(1), // title
@@ -477,16 +453,8 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
 fn render_blocked(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame(theme);
-    frame.render_widget(&outer, area);
-    let inner = outer.inner(area);
-
-    // Fill blocked screen background
-    frame.render_widget(
-        Paragraph::new("")
-            .style(Style::default().bg(theme.bg)),
-        inner,
-    );
+    frame.render_widget(Paragraph::new("").style(Style::default().bg(theme.bg)), area);
+    let inner = area;
 
     let lines = vec![
         Line::from(Span::styled(
@@ -513,16 +481,8 @@ fn render_blocked(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
 fn render_result(frame: &mut Frame<'_>, state: &AppState, theme: &Theme) {
     let area = frame.area();
 
-    let outer = outer_frame(theme);
-    frame.render_widget(&outer, area);
-    let inner = outer.inner(area);
-
-    // Fill result screen background
-    frame.render_widget(
-        Paragraph::new("")
-            .style(Style::default().bg(theme.bg)),
-        inner,
-    );
+    frame.render_widget(Paragraph::new("").style(Style::default().bg(theme.bg)), area);
+    let inner = area;
 
     let chunks = Layout::vertical([
         Constraint::Min(2),
