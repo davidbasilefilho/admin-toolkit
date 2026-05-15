@@ -1,3 +1,8 @@
+use ratatui_form::form::Form;
+use serde_json::Value;
+
+use crate::masked_field::PasswordField;
+
 pub const DOMAIN_TARGET: &str = "itu.local";
 pub const PREFEITURA_USER: &str = "Prefeitura";
 
@@ -9,41 +14,8 @@ pub struct SystemSnapshot {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum Focus {
-    Hostname,
-    Password,
-    Domain,
-}
-
-impl Focus {
-    pub fn next(self) -> Self {
-        match self {
-            Self::Hostname => Self::Password,
-            Self::Password => Self::Domain,
-            Self::Domain => Self::Hostname,
-        }
-    }
-
-    pub fn previous(self) -> Self {
-        match self {
-            Self::Hostname => Self::Domain,
-            Self::Password => Self::Hostname,
-            Self::Domain => Self::Password,
-        }
-    }
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
-pub enum InputKind {
-    Hostname,
-    Password,
-    Domain,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum Screen {
     Edit,
-    Input(InputKind),
     Confirm,
     Blocked,
     Result,
@@ -60,14 +32,12 @@ pub struct ApplyPlan {
 pub struct AppState {
     pub snapshot: SystemSnapshot,
     pub screen: Screen,
-    pub focus: Focus,
     pub hostname_enabled: bool,
     pub password_enabled: bool,
     pub domain_enabled: bool,
     pub hostname_target: String,
     pub password_value: String,
     pub domain_target: String,
-    pub input_buffer: String,
     pub status: String,
     pub blocked_reason: String,
     pub result_message: String,
@@ -88,14 +58,12 @@ impl AppState {
             } else {
                 Screen::Blocked
             },
-            focus: Focus::Hostname,
             hostname_enabled: false,
             password_enabled: false,
             domain_enabled: false,
             hostname_target: String::new(),
             password_value: String::new(),
             domain_target: String::from(DOMAIN_TARGET),
-            input_buffer: String::new(),
             status: String::from("Pronto."),
             blocked_reason,
             result_message: String::new(),
@@ -112,57 +80,6 @@ impl AppState {
         self.any_selected()
             && (!self.hostname_enabled || !self.hostname_target.is_empty())
             && (!self.password_enabled || !self.password_value.is_empty())
-    }
-
-    pub fn begin_input(&mut self, kind: InputKind) {
-        self.input_buffer = match kind {
-            InputKind::Hostname => self.hostname_target.clone(),
-            InputKind::Password => self.password_value.clone(),
-            InputKind::Domain => self.domain_target.clone(),
-        };
-        self.screen = Screen::Input(kind);
-        self.status = match kind {
-            InputKind::Hostname => String::from("Informe o novo nome do computador."),
-            InputKind::Password => String::from("Informe a nova senha da Prefeitura."),
-            InputKind::Domain => String::from("Informe o novo domínio."),
-        };
-    }
-
-    pub fn cancel_input(&mut self) {
-        self.input_buffer.clear();
-        self.screen = Screen::Edit;
-        self.status = String::from("Modo de edição.");
-    }
-
-    pub fn commit_input(&mut self, kind: InputKind) {
-        let value = self.input_buffer.trim().to_string();
-        match kind {
-            InputKind::Hostname => self.hostname_target = value,
-            InputKind::Password => self.password_value = value,
-            InputKind::Domain => self.domain_target = value,
-        }
-        self.input_buffer.clear();
-        self.screen = Screen::Edit;
-        self.status = String::from("Destino atualizado.");
-    }
-
-    pub fn move_focus_next(&mut self) {
-        self.focus = self.focus.next();
-        self.status = String::from("Modo de edição.");
-    }
-
-    pub fn move_focus_previous(&mut self) {
-        self.focus = self.focus.previous();
-        self.status = String::from("Modo de edição.");
-    }
-
-    pub fn toggle_focused(&mut self) {
-        match self.focus {
-            Focus::Hostname => self.hostname_enabled = !self.hostname_enabled,
-            Focus::Password => self.password_enabled = !self.password_enabled,
-            Focus::Domain => self.domain_enabled = !self.domain_enabled,
-        }
-        self.status = String::from("Seleção atualizada.");
     }
 
     pub fn selected_plan(&self) -> Option<ApplyPlan> {
@@ -214,6 +131,81 @@ impl AppState {
 
         warnings
     }
+
+    pub fn build_form(&self) -> Form {
+        let mut builder = Form::builder()
+            .title("Ações em Estágio");
+
+        builder = builder
+            .checkbox("hostname_enabled", "Alterar nome do computador")
+                .checked(self.hostname_enabled)
+                .done()
+            .checkbox("password_enabled", "Alterar senha da Prefeitura")
+                .checked(self.password_enabled)
+                .done()
+            .checkbox("domain_enabled", "Alterar domínio para itu.local")
+                .checked(self.domain_enabled)
+                .done();
+
+        let mut hostname_field = builder
+            .text("hostname_target", "Novo nome do computador")
+                .placeholder("ex: PC-02")
+                .initial_value(self.hostname_target.clone());
+        if self.hostname_enabled {
+            hostname_field = hostname_field.required();
+        }
+        builder = hostname_field.done();
+
+        let masked = PasswordField::new("password_value", "Senha da Prefeitura")
+            .placeholder("nova senha")
+            .initial_value(self.password_value.clone());
+        let masked: Box<dyn ratatui_form::field::Field> = if self.password_enabled {
+            Box::new(masked.required())
+        } else {
+            Box::new(masked)
+        };
+        builder = builder.field(masked);
+
+        let mut domain_field = builder
+            .text("domain_target", "Domínio de destino")
+                .placeholder("itu.local")
+                .initial_value(self.domain_target.clone());
+        if self.domain_enabled {
+            domain_field = domain_field.required();
+        }
+        builder = domain_field.done();
+
+        builder.build()
+    }
+
+    pub fn extract_form_values(&mut self, json: &Value) {
+        self.hostname_enabled = json["hostname_enabled"]
+            .as_bool()
+            .unwrap_or(false);
+        self.password_enabled = json["password_enabled"]
+            .as_bool()
+            .unwrap_or(false);
+        self.domain_enabled = json["domain_enabled"]
+            .as_bool()
+            .unwrap_or(false);
+        self.hostname_target = json["hostname_target"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        self.password_value = json["password_value"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+        self.domain_target = json["domain_target"]
+            .as_str()
+            .unwrap_or("")
+            .to_string();
+
+        // Trim values
+        self.hostname_target = self.hostname_target.trim().to_string();
+        self.password_value = self.password_value.trim().to_string();
+        self.domain_target = self.domain_target.trim().to_string();
+    }
 }
 
 pub fn mask_text(value: &str) -> String {
@@ -234,21 +226,6 @@ mod tests {
             domain: String::from("WORKGROUP"),
             elevated: true,
         }
-    }
-
-    #[test]
-    fn toggles_actions_independently() {
-        let mut state = AppState::new(snapshot());
-
-        state.toggle_focused();
-        state.move_focus_next();
-        state.toggle_focused();
-        state.move_focus_previous();
-        state.toggle_focused();
-
-        assert!(state.password_enabled);
-        assert!(!state.hostname_enabled);
-        assert!(!state.domain_enabled);
     }
 
     #[test]
@@ -282,26 +259,6 @@ mod tests {
     }
 
     #[test]
-    fn statuses_are_localized_to_portuguese() {
-        let mut state = AppState::new(snapshot());
-
-        assert_eq!(state.status, "Pronto.");
-
-        state.begin_input(InputKind::Hostname);
-        assert_eq!(state.status, "Informe o novo nome do computador.");
-
-        state.cancel_input();
-        assert_eq!(state.status, "Modo de edição.");
-
-        state.toggle_focused();
-        assert_eq!(state.status, "Seleção atualizada.");
-
-        state.input_buffer = String::from("PC-02");
-        state.commit_input(InputKind::Hostname);
-        assert_eq!(state.status, "Destino atualizado.");
-    }
-
-    #[test]
     fn confirm_requires_required_values() {
         let mut state = AppState::new(snapshot());
         state.hostname_enabled = true;
@@ -311,5 +268,46 @@ mod tests {
         state.hostname_target = String::from("PC-02");
 
         assert!(state.can_confirm());
+    }
+
+    #[test]
+    fn build_and_extract_roundtrip() {
+        let mut state = AppState::new(snapshot());
+        state.hostname_enabled = true;
+        state.hostname_target = String::from("PC-02");
+        state.password_enabled = true;
+        state.password_value = String::from("secret123");
+        state.domain_enabled = true;
+        state.domain_target = String::from("demo.local");
+
+        let form = state.build_form();
+        let json = form.to_json();
+
+        let mut extracted = AppState::new(snapshot());
+        extracted.extract_form_values(&json);
+
+        assert!(extracted.hostname_enabled);
+        assert!(extracted.password_enabled);
+        assert!(extracted.domain_enabled);
+        assert_eq!(extracted.hostname_target, "PC-02");
+        assert_eq!(extracted.password_value, "secret123");
+        assert_eq!(extracted.domain_target, "demo.local");
+    }
+
+    #[test]
+    fn extract_from_empty_form() {
+        let state = AppState::new(snapshot());
+        let form = state.build_form();
+        let json = form.to_json();
+
+        let mut extracted = AppState::new(snapshot());
+        extracted.extract_form_values(&json);
+
+        assert!(!extracted.hostname_enabled);
+        assert!(!extracted.password_enabled);
+        assert!(!extracted.domain_enabled);
+        assert_eq!(extracted.hostname_target, "");
+        assert_eq!(extracted.password_value, "");
+        assert_eq!(extracted.domain_target, DOMAIN_TARGET);
     }
 }

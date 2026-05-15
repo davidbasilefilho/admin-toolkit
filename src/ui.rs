@@ -1,11 +1,10 @@
-use std::borrow::Cow;
-
-use crate::state::{AppState, DOMAIN_TARGET, Focus, InputKind, Screen, mask_text};
+use crate::state::{AppState, Screen};
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Direction, Layout, Rect};
 use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
-use ratatui::widgets::{Block, Borders, List, ListItem, Paragraph};
+use ratatui::widgets::{Block, Borders, Paragraph};
+use ratatui_form::Form;
 
 const BLUE: Color = Color::Rgb(96, 165, 250);
 const CYAN: Color = Color::Rgb(34, 211, 238);
@@ -14,76 +13,29 @@ const YELLOW: Color = Color::Rgb(250, 204, 21);
 const RED: Color = Color::Rgb(248, 113, 113);
 const MAGENTA: Color = Color::Rgb(232, 121, 249);
 const TEXT: Color = Color::Rgb(226, 232, 240);
-const MUTED: Color = Color::Rgb(148, 163, 184);
 
-pub fn render(frame: &mut Frame<'_>, state: &AppState) {
+pub fn render(frame: &mut Frame<'_>, state: &AppState, form: &Form) {
     match state.screen {
-        Screen::Edit => render_edit(frame, state),
-        Screen::Input(kind) => render_input(frame, state, kind),
+        Screen::Edit => render_edit(frame, state, form),
         Screen::Confirm => render_confirm(frame, state),
         Screen::Blocked => render_blocked(frame, state),
         Screen::Result => render_result(frame, state),
     }
 }
 
-fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
+fn render_edit(frame: &mut Frame<'_>, state: &AppState, form: &Form) {
     let chunks = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
             Constraint::Length(5),
-            Constraint::Min(8),
+            Constraint::Min(10),
             Constraint::Length(3),
         ])
         .split(frame.area());
 
     render_snapshot(frame, chunks[0], state);
-    render_actions(frame, chunks[1], state);
-    render_shortcuts(frame, chunks[2]);
-}
-
-fn render_input(frame: &mut Frame<'_>, state: &AppState, kind: InputKind) {
-    let title = match kind {
-        InputKind::Hostname => "Destino do nome do computador",
-        InputKind::Password => "Destino da senha da Prefeitura",
-        InputKind::Domain => "Destino do domínio",
-    };
-
-    let chunks = Layout::default()
-        .direction(Direction::Vertical)
-        .constraints([
-            Constraint::Length(5),
-            Constraint::Min(7),
-            Constraint::Length(3),
-        ])
-        .split(frame.area());
-
-    render_snapshot(frame, chunks[0], state);
-
-    let content = match kind {
-        InputKind::Hostname => Cow::Borrowed(state.input_buffer.as_str()),
-        InputKind::Password => Cow::Owned(mask_text(&state.input_buffer)),
-        InputKind::Domain => Cow::Borrowed(state.input_buffer.as_str()),
-    };
-
-    let input = Paragraph::new(vec![
-        Line::from(title),
-        Line::from(Span::styled(
-            content,
-            Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
-        )),
-    ])
-    .block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(BLUE))
-            .title(Span::styled(
-                "Entrada",
-                Style::default().fg(YELLOW).add_modifier(Modifier::BOLD),
-            )),
-    );
-    frame.render_widget(input, chunks[1]);
-
-    render_shortcuts(frame, chunks[2]);
+    form.render(chunks[1], frame.buffer_mut());
+    render_status(frame, chunks[2], &state.status);
 }
 
 fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
@@ -181,6 +133,7 @@ fn render_result(frame: &mut Frame<'_>, state: &AppState) {
 }
 
 fn render_snapshot(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
+    use crate::state::DOMAIN_TARGET;
     let snapshot = Paragraph::new(vec![
         Line::from(vec![
             Span::styled(
@@ -219,75 +172,6 @@ fn render_snapshot(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
     frame.render_widget(snapshot, area);
 }
 
-fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
-    let items = vec![
-        action_item(
-            "Alterar nome do computador",
-            state.hostname_enabled,
-            matches!(state.focus, Focus::Hostname),
-            if state.hostname_target.is_empty() {
-                Some("precisa de destino")
-            } else {
-                Some(state.hostname_target.as_str())
-            },
-        ),
-        action_item(
-            "Alterar senha da Prefeitura",
-            state.password_enabled,
-            matches!(state.focus, Focus::Password),
-            if state.password_value.is_empty() {
-                Some("precisa de senha")
-            } else {
-                Some("senha definida")
-            },
-        ),
-        action_item(
-            "Alterar domínio para itu.local",
-            state.domain_enabled,
-            matches!(state.focus, Focus::Domain),
-            if state.domain_target.is_empty() {
-                Some("precisa de destino")
-            } else {
-                Some(state.domain_target.as_str())
-            },
-        ),
-    ];
-
-    let list = List::new(items).block(
-        Block::default()
-            .borders(Borders::ALL)
-            .border_style(Style::default().fg(BLUE))
-            .title(Span::styled(
-                "Ações",
-                Style::default().fg(CYAN).add_modifier(Modifier::BOLD),
-            )),
-    );
-    frame.render_widget(list, area);
-}
-
-fn action_item<'a>(
-    label: &'a str,
-    enabled: bool,
-    focused: bool,
-    note: Option<&'a str>,
-) -> ListItem<'a> {
-    let marker = if enabled { "[x]" } else { "[ ]" };
-    let mut spans = vec![Span::raw(marker), Span::raw(" "), Span::raw(label)];
-
-    if let Some(note) = note {
-        spans.push(Span::raw(" - "));
-        spans.push(Span::styled(note, Style::default().fg(MUTED)));
-    }
-
-    let mut item = ListItem::new(Line::from(spans));
-    if focused {
-        item = item.style(Style::default().fg(CYAN).add_modifier(Modifier::BOLD));
-    } else if enabled {
-        item = item.style(Style::default().fg(GREEN));
-    }
-    item
-}
-
 fn render_status(frame: &mut Frame<'_>, area: Rect, text: &str) {
     let status = Paragraph::new(text).block(
         Block::default()
@@ -307,17 +191,6 @@ fn render_footer(frame: &mut Frame<'_>, area: Rect, text: &str) {
             .borders(Borders::ALL)
             .border_style(Style::default().fg(BLUE)),
     );
-    frame.render_widget(footer, area);
-}
-
-fn render_shortcuts(frame: &mut Frame<'_>, area: Rect) {
-    let footer = Paragraph::new("↑↓ mover  espaço alternar  e editar  enter confirmar  q sair")
-        .alignment(Alignment::Center)
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .border_style(Style::default().fg(YELLOW)),
-        );
     frame.render_widget(footer, area);
 }
 
