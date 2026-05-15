@@ -1,3 +1,4 @@
+use ratatui::style::Modifier;
 use ratatui_form::Form;
 use serde_json::Value;
 
@@ -228,6 +229,14 @@ impl AppState {
     }
 
     pub fn build_input_form(&self, kind: InputKind) -> Form {
+        let theme = crate::theme::Theme::cohesive_dark();
+        self.build_input_form_with_theme(kind, &theme)
+    }
+
+    pub fn build_input_form_with_theme(&self, kind: InputKind, theme: &crate::theme::Theme) -> Form {
+        use ratatui::style::Style;
+        use ratatui_form::FormStyle;
+
         let (id, label, initial) = match kind {
             InputKind::Hostname => (
                 "hostname_target",
@@ -258,7 +267,15 @@ impl AppState {
             InputKind::CreateUser => "Criar usuário",
         };
 
-        let mut builder = Form::builder().title(title);
+        let form_style = FormStyle::new()
+            .title(Style::default().fg(theme.accent).add_modifier(Modifier::BOLD))
+            .input(Style::default().bg(theme.bg).fg(theme.fg_main))
+            .input_focused(Style::default().bg(theme.bg).fg(theme.fg_main))
+            .placeholder(Style::default().fg(theme.fg_dim));
+
+        let mut builder = Form::builder()
+            .title(title)
+            .style(form_style);
 
         if matches!(kind, InputKind::Password) {
             let field = PasswordField::new(id, label)
