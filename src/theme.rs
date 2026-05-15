@@ -2,7 +2,7 @@
 //!
 //! Provides a centralized `Theme` struct with all styling constants
 //! organized by screen role. All color values are defined here and
-//! referenced by `ui.rs` for consistent dark high-contrast rendering.
+//! referenced by `ui.rs` for consistent dark cohesive rendering.
 
 use ratatui::style::Color;
 
@@ -10,6 +10,7 @@ use ratatui::style::Color;
 ///
 /// Fields are grouped by visual role:
 /// - `fg_*`: Foreground text colors
+/// - `bg`: Background fill for panels
 /// - `border_*`: Border and frame colors
 /// - `invert_*`: Focus/highlight colors
 /// - `accent`: Interactive element color
@@ -21,6 +22,9 @@ pub struct Theme {
 
     /// Dim foreground color for secondary text (labels, subtitles, footers).
     pub fg_dim: Color,
+
+    /// Background fill for interior of panels.
+    pub bg: Color,
 
     /// Outer frame border color (thick border around entire screen).
     pub border_frame: Color,
@@ -53,45 +57,33 @@ pub struct Theme {
 impl Default for Theme {
     fn default() -> Self {
         Self {
-            fg_main: Color::White,
-            fg_dim: Color::DarkGray,
-            border_frame: Color::White,
-            border_panel: Color::DarkGray,
-            sep: Color::DarkGray,
-            invert_bg: Color::White,
-            invert_fg: Color::Black,
-            accent: Color::Cyan,
-            status_success: Color::Green,
-            status_warning: Color::Yellow,
-            status_error: Color::Red,
+            fg_main: Color::Rgb(0xC0, 0xCA, 0xF5),
+            fg_dim: Color::Rgb(0x56, 0x5F, 0x89),
+            bg: Color::Rgb(0x1E, 0x22, 0x33),
+            border_frame: Color::Rgb(0x7A, 0xA2, 0xF7),
+            border_panel: Color::Rgb(0x33, 0x3A, 0x50),
+            sep: Color::Rgb(0x33, 0x3A, 0x50),
+            invert_bg: Color::Rgb(0x7A, 0xA2, 0xF7),
+            invert_fg: Color::Rgb(0x1E, 0x22, 0x33),
+            accent: Color::Rgb(0x7D, 0xCF, 0xFF),
+            status_success: Color::Rgb(0x9E, 0xCE, 0x6A),
+            status_warning: Color::Rgb(0xE0, 0xAF, 0x68),
+            status_error: Color::Rgb(0xF7, 0x76, 0x8E),
         }
     }
 }
 
 impl Theme {
-    /// Dark high-contrast palette optimized for terminal rendering.
+    /// Dark cohesive palette optimized for terminal rendering.
     ///
     /// This palette uses:
-    /// - Dark background (terminal default) for maximum compatibility
-    /// - High-contrast white foreground for readability
-    /// - Dark gray borders for subtle panel definition
-    /// - Cyan accent for interactive elements
-    /// - Semantic status colors (green/yellow/red) for feedback
+    /// - Navy-slate background for deep, comfortable contrast
+    /// - Periwinkle blue accent for interactive/structural elements
+    /// - Cyan bright accent for emphasis
+    /// - Semantic status colors with consistent saturation
     ///
-    /// All colors use 16-color ANSI palette for maximum terminal compatibility.
-    pub fn dark_high_contrast() -> Self {
-        Self {
-            fg_main: Color::White,
-            fg_dim: Color::DarkGray,
-            border_frame: Color::White,
-            border_panel: Color::Gray,
-            sep: Color::Gray,
-            invert_bg: Color::White,
-            invert_fg: Color::Black,
-            accent: Color::Cyan,
-            status_success: Color::Green,
-            status_warning: Color::Yellow,
-            status_error: Color::Red,
-        }
+    /// All colors use TrueColor (24-bit RGB) for rich terminal rendering.
+    pub fn cohesive_dark() -> Self {
+        Self::default()
     }
 }
