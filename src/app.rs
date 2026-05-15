@@ -97,7 +97,19 @@ impl<Ops: WindowsOps> App<Ops> {
                 Ok(false)
             }
             KeyCode::Char('e') => {
-                self.begin_edit();
+                let enabled = match self.state.focus {
+                    Focus::Hostname => self.state.hostname_enabled,
+                    Focus::Password => self.state.password_enabled,
+                    Focus::Domain => self.state.domain_enabled,
+                    Focus::CreateUser => self.state.create_user_enabled,
+                };
+                if enabled {
+                    self.begin_edit();
+                } else {
+                    self.state.status = String::from(
+                        "Selecione a ação com espaço antes de editar.",
+                    );
+                }
                 Ok(false)
             }
             KeyCode::Enter => {
