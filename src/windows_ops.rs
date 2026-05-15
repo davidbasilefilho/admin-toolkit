@@ -131,14 +131,32 @@ fn join_domain(domain: &str) -> io::Result<()> {
 
 fn create_local_user(username: &str) -> io::Result<()> {
     let output = Command::new("net")
-        .args(["user", username, "/add"])
+        .args([
+            "user",
+            username,
+            "/add",
+            "/passwordchg:no",
+            "/passwordreq:no",
+        ])
         .output()?;
 
-    if output.status.success() {
-        Ok(())
-    } else {
-        Err(io::Error::other(format_command_error("net user", &output)))
+    if !output.status.success() {
+        return Err(io::Error::other(format_command_error("net user", &output)));
     }
+
+    // Set account to never expire
+    let expire = Command::new("net")
+        .args(["user", username, "/expires:never"])
+        .output()?;
+
+    if !expire.status.success() {
+        return Err(io::Error::other(format_command_error(
+            "net user /expires",
+            &expire,
+        )));
+    }
+
+    Ok(())
 }
 
 fn set_password(user: &str, password: &str) -> io::Result<()> {

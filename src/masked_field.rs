@@ -1,17 +1,20 @@
 use crossterm::event::{KeyCode, KeyEvent};
 use ratatui::buffer::Buffer;
 use ratatui::layout::Rect;
+use ratatui::style::{Color, Modifier, Style};
 use ratatui::text::{Line, Span};
 use ratatui::widgets::Widget;
 use ratatui_form::field::Field;
 use ratatui_form::style::FormStyle;
 use ratatui_form::validation::{ValidationError, Validator};
 use serde_json::Value;
+use unicode_width::UnicodeWidthStr;
 
 pub struct PasswordField {
     id: String,
     label: String,
     value: String,
+    cursor_position: usize,
     placeholder: Option<String>,
     validators: Vec<Box<dyn Validator>>,
     required: bool,
@@ -23,6 +26,7 @@ impl PasswordField {
             id: id.into(),
             label: label.into(),
             value: String::new(),
+            cursor_position: 0,
             placeholder: None,
             validators: Vec::new(),
             required: false,
@@ -41,9 +45,9 @@ impl PasswordField {
 
     pub fn initial_value(mut self, value: impl Into<String>) -> Self {
         self.value = value.into();
+        self.cursor_position = self.value.len();
         self
     }
-
 }
 
 impl Field for PasswordField {
@@ -56,7 +60,7 @@ impl Field for PasswordField {
     }
 
     fn height(&self) -> u16 {
-        3
+        1
     }
 
     fn is_required(&self) -> bool {
@@ -64,62 +68,124 @@ impl Field for PasswordField {
     }
 
     fn render(&self, area: Rect, buf: &mut Buffer, focused: bool, style: &FormStyle) {
-        if area.width < 4 {
+        if area.height < 1 || area.width < 1 {
             return;
         }
 
+        // Render label (same style as TextInput)
         let label_style = if focused {
             style.label_focused
         } else {
             style.label
         };
 
-        let label = Line::from(Span::styled(&self.label, label_style));
+        let required_marker = if self.required { "*" } else { "" };
+        let label_text = format!("{}{}: ", self.label, required_marker);
+        let label_width = label_text.width().min(area.width as usize);
+
+        let label_span = Span::styled(&label_text, label_style);
+        let label_line = Line::from(label_span);
         let label_area = Rect {
             x: area.x,
             y: area.y,
-            width: area.width,
+            width: label_width as u16,
             height: 1,
         };
-        label.render(label_area, buf);
+        label_line.render(label_area, buf);
 
-        let input_style = if focused {
-            style.input_focused
-        } else {
-            style.input
-        };
+        // Calculate input area
+        let input_x = area.x + label_width as u16;
+        let input_width = area.width.saturating_sub(label_width as u16);
 
-        let masked: String = self.value.chars().map(|_| '•').collect();
-        let display_text = if masked.is_empty() {
-            if let Some(ref placeholder) = self.placeholder {
-                Line::from(Span::styled(
-                    format!(" {} ", placeholder),
-                    style.placeholder,
-                ))
+        if input_width == 0 {
+            return;
+        }
+
+        // Determine display text (masked)
+        if self.value.is_empty() {
+            let display_text = if let Some(ref placeholder) = self.placeholder {
+                placeholder.as_str()
             } else {
-                Line::from(Span::raw(""))
+                ""
+            };
+            let input_bg_style = if focused {
+                style.input_focused
+            } else {
+                style.input
+            };
+
+            for x in input_x..input_x + input_width {
+                buf[(x, area.y)].set_style(input_bg_style);
+                buf[(x, area.y)].set_char(' ');
+            }
+
+            let visible_text: String = display_text.chars().take(input_width as usize).collect();
+            let display_style = style.placeholder;
+            for (i, c) in visible_text.chars().enumerate() {
+                if input_x + i as u16 >= area.x + area.width {
+                    break;
+                }
+                buf[(input_x + i as u16, area.y)].set_char(c);
+                buf[(input_x + i as u16, area.y)].set_style(display_style);
             }
         } else {
-            Line::from(Span::styled(masked, input_style))
+            // Mask: show bullet per char
+            let masked: String = self.value.chars().map(|_| '•').collect();
+            return self.render_masked(area, buf, focused, style, input_x, input_width, masked);
         };
-
-        let input_area = Rect {
-            x: area.x,
-            y: area.y + 1,
-            width: area.width,
-            height: 1,
-        };
-        display_text.render(input_area, buf);
     }
 
     fn handle_input(&mut self, event: &KeyEvent) -> bool {
         match event.code {
             KeyCode::Char(ch) if !ch.is_control() => {
-                self.value.push(ch);
+                self.value.insert(self.cursor_position, ch);
+                self.cursor_position += ch.len_utf8();
                 true
             }
             KeyCode::Backspace => {
-                self.value.pop();
+                if self.cursor_position > 0 {
+                    let prev = self.value[..self.cursor_position]
+                        .char_indices()
+                        .last()
+                        .map(|(i, _)| i)
+                        .unwrap_or(0);
+                    self.value.remove(prev);
+                    self.cursor_position = prev;
+                }
+                true
+            }
+            KeyCode::Delete => {
+                if self.cursor_position < self.value.len() {
+                    self.value.remove(self.cursor_position);
+                }
+                true
+            }
+            KeyCode::Left => {
+                if self.cursor_position > 0 {
+                    self.cursor_position = self.value[..self.cursor_position]
+                        .char_indices()
+                        .last()
+                        .map(|(i, _)| i)
+                        .unwrap_or(0);
+                }
+                true
+            }
+            KeyCode::Right => {
+                if self.cursor_position < self.value.len() {
+                    self.cursor_position = self.value[self.cursor_position..]
+                        .char_indices()
+                        .nth(1)
+                        .map(|(i, _)| self.cursor_position + i)
+                        .unwrap_or(self.value.len());
+                }
+                true
+            }
+            KeyCode::Home => {
+                self.cursor_position = 0;
+                true
+            }
+            KeyCode::End => {
+                self.cursor_position = self.value.len();
                 true
             }
             _ => false,
@@ -153,6 +219,55 @@ impl Field for PasswordField {
             Ok(())
         } else {
             Err(errors)
+        }
+    }
+}
+
+impl PasswordField {
+    fn render_masked(
+        &self,
+        area: Rect,
+        buf: &mut Buffer,
+        focused: bool,
+        style: &FormStyle,
+        input_x: u16,
+        input_width: u16,
+        masked: String,
+    ) {
+        let input_bg_style = if focused {
+            style.input_focused
+        } else {
+            style.input
+        };
+
+        // Fill background
+        for x in input_x..input_x + input_width {
+            buf[(x, area.y)].set_style(input_bg_style);
+            buf[(x, area.y)].set_char(' ');
+        }
+
+        // Render masked text
+        let visible: String = masked.chars().take(input_width as usize).collect();
+        for (i, c) in visible.chars().enumerate() {
+            let pos = input_x + i as u16;
+            if pos >= area.x + area.width {
+                break;
+            }
+            buf[(pos, area.y)].set_char(c);
+            buf[(pos, area.y)].set_style(input_bg_style);
+        }
+
+        // Cursor
+        if focused {
+            let cursor_x = input_x + self.value[..self.cursor_position].width() as u16;
+            if cursor_x < area.x + area.width {
+                buf[(cursor_x, area.y)].set_style(
+                    Style::default()
+                        .bg(Color::White)
+                        .fg(Color::Black)
+                        .add_modifier(Modifier::SLOW_BLINK),
+                );
+            }
         }
     }
 }
