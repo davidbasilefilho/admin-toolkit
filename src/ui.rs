@@ -27,25 +27,12 @@ fn outer_frame<'a>() -> Block<'a> {
     Block::bordered()
         .border_type(BorderType::Thick)
         .border_style(Style::default().fg(BORDER_FRAME))
-        .title(Line::from(vec![
-            Span::styled(
-                " admin-toolkit ",
-                Style::default().fg(FG_MAIN).add_modifier(Modifier::BOLD),
-            ),
-            Span::styled("v1.4.0", Style::default().fg(FG_DIM)),
-        ]))
-        .title_alignment(Alignment::Left)
 }
 
-fn panel<'a>(title: &'a str) -> Block<'a> {
+fn panel<'a>(_title: &'a str) -> Block<'a> {
     Block::bordered()
         .border_type(BorderType::Thick)
         .border_style(Style::default().fg(BORDER_PANEL))
-        .title(Line::from(Span::styled(
-            format!(" {} ", title),
-            Style::default().fg(ACCENT).add_modifier(Modifier::BOLD),
-        )))
-        .title_alignment(Alignment::Left)
 }
 
 // ── Separators ──
@@ -89,38 +76,46 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
 
     let has_status = !state.status.is_empty();
     let sys_extra = sys_extra_lines(state);
-    let sys_content_height = 5 + sys_extra;   // header + blank + 3 data + extras
-    let sys_panel_height = sys_content_height + 2; // +2 for panel borders
+    let sys_content_height = 5 + sys_extra;
+    let sys_panel_height = sys_content_height + 2;
 
     let mut constraints: Vec<Constraint> = vec![
-        Constraint::Length(1),                        // 0: subtitle
-        Constraint::Length(sys_panel_height as u16),  // 1: sys panel
-        Constraint::Length(1),                        // 2: spacing
-        Constraint::Min(3),                           // 3: actions panel
+        Constraint::Length(1),                        // 0: title
+        Constraint::Length(1),                        // 1: subtitle
+        Constraint::Length(sys_panel_height as u16),  // 2: sys panel
+        Constraint::Length(1),                        // 3: spacing
+        Constraint::Min(3),                           // 4: actions panel
     ];
 
-    // status sep + status text (conditional)
-    let status_idx = constraints.len(); // 4
     if has_status {
-        constraints.push(Constraint::Length(1)); // thin sep
-        constraints.push(Constraint::Length(1)); // status row
+        constraints.push(Constraint::Length(1));
+        constraints.push(Constraint::Length(1));
     }
 
-    // footer sep + footer
-    let sep_idx = constraints.len(); // 5 or 6
-    constraints.push(Constraint::Length(1)); // heavy sep
-
-    let footer_idx = constraints.len(); // 6 or 7
-    constraints.push(Constraint::Length(1)); // footer
+    let sep_idx = constraints.len();
+    constraints.push(Constraint::Length(1));
+    let footer_idx = constraints.len();
+    constraints.push(Constraint::Length(1));
 
     let chunks = Layout::vertical(constraints).split(inner);
+
+    // Title line (centered, no border)
+    let title = Paragraph::new(Line::from(vec![
+        Span::styled(
+            "admin-toolkit",
+            Style::default().fg(FG_MAIN).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("v1.4.0", Style::default().fg(FG_DIM)),
+    ]))
+    .alignment(Alignment::Center);
+    frame.render_widget(title, chunks[0]);
 
     // Subtitle
     let subtitle = Paragraph::new(Line::from(Span::styled(
         "alterações em lote do sistema",
         Style::default().fg(FG_DIM),
     )));
-    frame.render_widget(subtitle, chunks[0]);
+    frame.render_widget(subtitle, chunks[1]);
 
     // System info panel
     let sys_panel = panel("Sistema");
@@ -132,6 +127,7 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
     let act_panel = panel("Ações");
     frame.render_widget(&act_panel, chunks[3]);
     let act_inner = act_panel.inner(chunks[3]);
+    let status_idx = 5;
     render_actions_content(frame, act_inner, state);
 
     // Status row
@@ -144,6 +140,7 @@ fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
         frame.render_widget(status_line, chunks[status_idx + 1]);
     }
 
+    heavy_sep(frame, chunks[7]);
     // Footer separator
     heavy_sep(frame, chunks[sep_idx]);
 
@@ -351,13 +348,33 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
     let inner = outer.inner(area);
 
     let chunks = Layout::vertical([
-        Constraint::Min(2),
-        Constraint::Length(1), // sep
-        Constraint::Length(2), // warnings
-        Constraint::Length(1), // footer sep
-        Constraint::Length(1), // footer
+        Constraint::Length(1),  // title
+        Constraint::Length(1),  // subtitle
+        Constraint::Min(2),     // summary
+        Constraint::Length(1),  // sep
+        Constraint::Length(2),  // warnings
+        Constraint::Length(1),  // footer sep
+        Constraint::Length(1),  // footer
     ])
     .split(inner);
+
+    // Title line (centered, no border)
+    let title = Paragraph::new(Line::from(vec![
+        Span::styled(
+            "admin-toolkit",
+            Style::default().fg(FG_MAIN).add_modifier(Modifier::BOLD),
+        ),
+        Span::styled("v1.4.0", Style::default().fg(FG_DIM)),
+    ]))
+    .alignment(Alignment::Center);
+    frame.render_widget(title, chunks[0]);
+
+    // Subtitle
+    let subtitle = Paragraph::new(Line::from(Span::styled(
+        "alterações em lote do sistema",
+        Style::default().fg(FG_DIM),
+    )));
+    frame.render_widget(subtitle, chunks[1]);
 
     let mut lines = state.summary_lines().into_iter().map(Line::from).collect::<Vec<_>>();
     for line in &mut lines {
@@ -366,7 +383,7 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
             line.spans.insert(0, Span::styled("  ", Style::default()));
         }
     }
-    frame.render_widget(Paragraph::new(lines), chunks[0]);
+    frame.render_widget(Paragraph::new(lines), chunks[2]);
 
     let warn = state.warnings();
     if !warn.is_empty() {
@@ -379,16 +396,16 @@ fn render_confirm(frame: &mut Frame<'_>, state: &AppState) {
                 ))
             })
             .collect();
-        frame.render_widget(Paragraph::new(warn_lines), chunks[2]);
+        frame.render_widget(Paragraph::new(warn_lines), chunks[4]);
     }
 
-    heavy_sep(frame, chunks[3]);
+    heavy_sep(frame, chunks[4]);
 
     let help = Paragraph::new(Line::from(Span::styled(
         "enter aplicar  esc voltar",
         Style::default().fg(FG_DIM),
     )));
-    frame.render_widget(help, chunks[4]);
+    frame.render_widget(help, chunks[6]);
 }
 
 // ── Blocked screen ──
