@@ -53,6 +53,11 @@ impl WindowsOps for RealWindowsOps {
             reboot_required = true;
         }
 
+        if let Some(username) = plan.create_user.as_deref() {
+            create_local_user(username)?;
+            applied.push(format!("user {username} created"));
+        }
+
         if applied.is_empty() {
             return Err(io::Error::new(
                 io::ErrorKind::InvalidInput,
@@ -122,6 +127,18 @@ fn join_domain(domain: &str) -> io::Result<()> {
         ps_quote(domain)
     );
     run_powershell(&script)
+}
+
+fn create_local_user(username: &str) -> io::Result<()> {
+    let output = Command::new("net")
+        .args(["user", username, "/add"])
+        .output()?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        Err(io::Error::other(format_command_error("net user", &output)))
+    }
 }
 
 fn set_password(user: &str, password: &str) -> io::Result<()> {

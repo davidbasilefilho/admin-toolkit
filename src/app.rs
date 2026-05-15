@@ -110,6 +110,8 @@ impl<Ops: WindowsOps> App<Ops> {
                     self.begin_edit();
                 } else if matches!(self.state.focus, Focus::Domain) && self.state.domain_enabled {
                     self.begin_edit();
+                } else if matches!(self.state.focus, Focus::CreateUser) && self.state.create_user_enabled {
+                    self.begin_edit();
                 } else {
                     self.state.status = String::from("Ative as ações e preencha os campos obrigatórios primeiro.");
                 }
@@ -124,6 +126,7 @@ impl<Ops: WindowsOps> App<Ops> {
             Focus::Hostname => InputKind::Hostname,
             Focus::Password => InputKind::Password,
             Focus::Domain => InputKind::Domain,
+            Focus::CreateUser => InputKind::CreateUser,
         };
         self.form = Some(self.state.build_input_form(kind));
         self.state.begin_input(kind);

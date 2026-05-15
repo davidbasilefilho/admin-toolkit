@@ -18,6 +18,7 @@ pub enum Focus {
     Hostname,
     Password,
     Domain,
+    CreateUser,
 }
 
 impl Focus {
@@ -25,15 +26,17 @@ impl Focus {
         match self {
             Self::Hostname => Self::Password,
             Self::Password => Self::Domain,
-            Self::Domain => Self::Hostname,
+            Self::Domain => Self::CreateUser,
+            Self::CreateUser => Self::Hostname,
         }
     }
 
     pub fn previous(self) -> Self {
         match self {
-            Self::Hostname => Self::Domain,
+            Self::Hostname => Self::CreateUser,
             Self::Password => Self::Hostname,
             Self::Domain => Self::Password,
+            Self::CreateUser => Self::Domain,
         }
     }
 }
@@ -43,6 +46,7 @@ pub enum InputKind {
     Hostname,
     Password,
     Domain,
+    CreateUser,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -59,6 +63,7 @@ pub struct ApplyPlan {
     pub hostname: Option<String>,
     pub password: Option<String>,
     pub domain: Option<String>,
+    pub create_user: Option<String>,
 }
 
 #[derive(Debug, Clone)]
@@ -69,9 +74,11 @@ pub struct AppState {
     pub hostname_enabled: bool,
     pub password_enabled: bool,
     pub domain_enabled: bool,
+    pub create_user_enabled: bool,
     pub hostname_target: String,
     pub password_value: String,
     pub domain_target: String,
+    pub create_user_username: String,
     pub status: String,
     pub blocked_reason: String,
     pub result_message: String,
@@ -96,9 +103,11 @@ impl AppState {
             hostname_enabled: false,
             password_enabled: false,
             domain_enabled: false,
+            create_user_enabled: false,
             hostname_target: String::new(),
             password_value: String::new(),
             domain_target: String::from(DOMAIN_TARGET),
+            create_user_username: String::new(),
             status: String::from("Pronto."),
             blocked_reason,
             result_message: String::new(),
@@ -108,13 +117,14 @@ impl AppState {
     }
 
     pub fn any_selected(&self) -> bool {
-        self.hostname_enabled || self.password_enabled || self.domain_enabled
+        self.hostname_enabled || self.password_enabled || self.domain_enabled || self.create_user_enabled
     }
 
     pub fn can_confirm(&self) -> bool {
         self.any_selected()
             && (!self.hostname_enabled || !self.hostname_target.is_empty())
             && (!self.password_enabled || !self.password_value.is_empty())
+            && (!self.create_user_enabled || !self.create_user_username.is_empty())
     }
 
     pub fn begin_input(&mut self, kind: InputKind) {
@@ -123,6 +133,7 @@ impl AppState {
             InputKind::Hostname => String::from("Informe o novo nome do computador."),
             InputKind::Password => String::from("Informe a nova senha da Prefeitura."),
             InputKind::Domain => String::from("Informe o novo domínio."),
+            InputKind::CreateUser => String::from("Informe o nome do novo usuário."),
         };
     }
 
@@ -137,6 +148,7 @@ impl AppState {
             InputKind::Hostname => self.hostname_target = value,
             InputKind::Password => self.password_value = value,
             InputKind::Domain => self.domain_target = value,
+            InputKind::CreateUser => self.create_user_username = value,
         }
         self.screen = Screen::Edit;
         self.status = String::from("Destino atualizado.");
@@ -157,6 +169,7 @@ impl AppState {
             Focus::Hostname => self.hostname_enabled = !self.hostname_enabled,
             Focus::Password => self.password_enabled = !self.password_enabled,
             Focus::Domain => self.domain_enabled = !self.domain_enabled,
+            Focus::CreateUser => self.create_user_enabled = !self.create_user_enabled,
         }
         self.status = String::from("Seleção atualizada.");
     }
@@ -170,6 +183,7 @@ impl AppState {
             hostname: self.hostname_enabled.then(|| self.hostname_target.clone()),
             password: self.password_enabled.then(|| self.password_value.clone()),
             domain: self.domain_enabled.then(|| self.domain_target.clone()),
+            create_user: self.create_user_enabled.then(|| self.create_user_username.clone()),
         })
     }
 
@@ -190,6 +204,9 @@ impl AppState {
         }
         if self.domain_enabled {
             lines.push(format!("Novo domínio: {}", self.domain_target));
+        }
+        if self.create_user_enabled {
+            lines.push(format!("Criar usuário: {}", self.create_user_username));
         }
         lines
     }
@@ -222,12 +239,18 @@ impl AppState {
                 "Domínio de destino",
                 self.domain_target.clone(),
             ),
+            InputKind::CreateUser => (
+                "create_user_username",
+                "Nome do novo usuário",
+                self.create_user_username.clone(),
+            ),
         };
 
         let title = match kind {
             InputKind::Hostname => "Editar hostname",
             InputKind::Password => "Editar senha",
             InputKind::Domain => "Editar domínio",
+            InputKind::CreateUser => "Criar usuário",
         };
 
         let mut builder = Form::builder().title(title);
@@ -255,6 +278,7 @@ impl AppState {
             InputKind::Hostname => "hostname_target",
             InputKind::Password => "password_value",
             InputKind::Domain => "domain_target",
+            InputKind::CreateUser => "create_user_username",
         };
         json[key].as_str().unwrap_or("").trim().to_string()
     }
