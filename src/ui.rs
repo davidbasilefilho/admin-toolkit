@@ -39,13 +39,14 @@ fn pad(area: Rect) -> Rect {
 // ── Edit screen ──
 
 fn render_edit(frame: &mut Frame<'_>, state: &AppState) {
-    // Full-width layout: header | sep | body | sep | footer
+    // Full-width layout: header | sep | body | sep | footer | spacer
     let chunks = Layout::vertical([
         Constraint::Length(1),   // header
         Constraint::Length(1),   // separator
         Constraint::Min(6),      // body (system + actions + status)
         Constraint::Length(1),   // separator
         Constraint::Length(1),   // footer
+        Constraint::Length(1),   // bottom spacing from edge
     ])
     .split(frame.area());
 
@@ -219,9 +220,6 @@ fn render_actions(frame: &mut Frame<'_>, area: Rect, state: &AppState) {
 
         lines.push(Line::from(spans));
     }
-
-    // Add blank line after actions for spacing from edge
-    lines.push(Line::from(""));
 
     frame.render_widget(Paragraph::new(lines), area);
 }
